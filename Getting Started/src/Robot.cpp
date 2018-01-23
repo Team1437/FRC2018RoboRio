@@ -21,16 +21,11 @@
 
 class Robot : public frc::IterativeRobot {
 private:
-	// Robot drive system
-	//frc::Spark m_left{0};
-	//frc::Spark m_right{1};
-	//frc::DifferentialDrive m_robotDrive{m_left, m_right};
 
 	frc::Joystick m_stick{0};
 	frc::LiveWindow& m_lw = *frc::LiveWindow::GetInstance();
 	frc::Timer m_timer;
 	cs::UsbCamera cam;
-	//frc::SmartDashboard dash;
 	std::shared_ptr<nt::NetworkTable> table;
 
 	TalonSRX * left;
@@ -47,7 +42,6 @@ private:
 	int counter;
 public:
 	Robot() {
-		//m_robotDrive.SetExpiration(0.1);
 		m_timer.Start();
 
 		left = new TalonSRX(0);
@@ -58,8 +52,6 @@ public:
 		cam = CameraServer::GetInstance()->StartAutomaticCapture();
 		cam.SetResolution(640, 480);
 		//CameraServer::GetInstance()->PutVideo("Rectangle", 640, 480);
-		//dash = new SmartDashboard::init();
-		//netTableInstance = nt::NetworkTableInstance::GetDefault();
 		limitSwitch = new frc::DigitalInput(0);
 
 		right->SetInverted(true);
@@ -71,15 +63,9 @@ public:
 		table = nt::NetworkTableInstance::GetDefault().GetTable("Vision");
 		imgWidth = 640;
 		counter = 0;
-
-		//	new std::vector<double>()
-		//previous = new std::vector<double>(4);
-
 	}
 
 	void AutonomousInit() override {
-		//m_timer.Reset();
-		//m_timer.Start();
 	}
 
 	void AutonomousPeriodic() override {
@@ -95,7 +81,19 @@ public:
 		counter = 0;
 	}
 
+
 	void TeleopPeriodic() override {
+/*		This mode of operation checks if "auton" is enabled, which can be toggled by pressing
+		the trigger button on a joystick. This mode tracks a yellow vex ball, and will have the
+		robot try its best to move towards it. The robot receives info about the position of the
+		ball from the network tables, then calculates how much power it should give to each motor.
+		It has also been programmed to back away from the ball if it does not move for a short period of time,
+		this has been done in trying to detect when the bot should try and slam into a wall after
+		in order to align itself with the portal.
+
+		When not in auton mode, a joystick acts as the main control input, with left/right turning
+		the robot and forward/back moving it either forwards or backwards.
+ 	  */
 		if (auton){
 			contour = table.get()->GetNumberArray("Contour", llvm::ArrayRef<double>());
 			if(contour.size() > 0){
