@@ -28,8 +28,11 @@ private:
 	cs::UsbCamera cam;
 	std::shared_ptr<nt::NetworkTable> table;
 
-	TalonSRX * left;
-	TalonSRX * right;
+	TalonSRX * leftFront;
+	TalonSRX * rightFront;
+	VictorSPX * leftRear;
+	VictorSPX * rightRear;
+
 	Joystick * joy;
 
 	frc::DigitalInput * limitSwitch;
@@ -44,8 +47,10 @@ public:
 	Robot() {
 		m_timer.Start();
 
-		left = new TalonSRX(0);
-		right = new TalonSRX(1);
+		leftFront = new TalonSRX(1);
+		rightFront = new TalonSRX(3);
+		leftRear = new VictorSPX(4);
+		rightRear = new VictorSPX(2);
 
 		joy = new Joystick(0);
 
@@ -54,10 +59,16 @@ public:
 		//CameraServer::GetInstance()->PutVideo("Rectangle", 640, 480);
 		limitSwitch = new frc::DigitalInput(0);
 
-		right->SetInverted(true);
+		leftFront->SetInverted(true);
+		leftRear->SetInverted(true);
 
-		left->EnableVoltageCompensation(true);
-		right->EnableVoltageCompensation(true);
+		leftFront->EnableVoltageCompensation(true);
+		rightFront->EnableVoltageCompensation(true);
+		leftRear->EnableVoltageCompensation(true);
+		rightRear->EnableVoltageCompensation(true);
+
+		rightRear->Set(ControlMode::Follower, 3);
+		leftRear->Set(ControlMode::Follower, 1);
 
 		auton = false;
 		table = nt::NetworkTableInstance::GetDefault().GetTable("Vision");
@@ -72,11 +83,13 @@ public:
 	}
 
 	void TeleopInit() override {
-		left->ConfigOpenloopRamp(0.5, 0);
-		right->ConfigOpenloopRamp(0.5, 0);
+		leftFront->ConfigOpenloopRamp(0.5, 0);
+		rightFront->ConfigOpenloopRamp(0.5, 0);
+		leftRear->ConfigOpenloopRamp(0.5, 0);
+		rightRear->ConfigOpenloopRamp(0.5, 0);
 
-		right->ConfigSelectedFeedbackSensor(QuadEncoder, 0, 0);
-		right->SetSensorPhase(false);
+		rightFront->ConfigSelectedFeedbackSensor(QuadEncoder, 0, 0);
+		rightFront->SetSensorPhase(false);
 		auton = false;
 		counter = 0;
 	}
@@ -110,12 +123,12 @@ public:
 				double dist = a/sqrt(w*h);
 				double error = (dist -150)/50;
 				error /= -25.0;
-				left->Set(ControlMode::PercentOutput, error + rectCenterX);
-				right->Set(ControlMode::PercentOutput, error - rectCenterX);
+				leftFront->Set(ControlMode::PercentOutput, error - rectCenterX);
+				rightFront->Set(ControlMode::PercentOutput, error + rectCenterX);
 				if( pow(x - previous[0], 2) + pow((y - previous[1]), 2) < pow(5, 2) && pow(w*h - previous[2] * previous[3], 2) < pow(10, 2)){
 					if (counter >= 3){
-						left->Set(ControlMode::PercentOutput, 0.3);
-						right->Set(ControlMode::PercentOutput, 0.3);
+						leftFront->Set(ControlMode::PercentOutput, 0.3);
+						rightFront->Set(ControlMode::PercentOutput, 0.3);
 					}
 					counter++;
 				} else {
@@ -126,17 +139,17 @@ public:
 				previous[2] = w;
 				previous[3] = h;
 			} else {
-				left->Set(ControlMode::PercentOutput, 0);
-				right->Set(ControlMode::PercentOutput, 0);
+				leftFront->Set(ControlMode::PercentOutput, 0);
+				rightFront->Set(ControlMode::PercentOutput, 0);
 			}
 		} else {
 			double joyX = joy->GetX();
 			double joyY = joy->GetY();
-			left->Set(ControlMode::PercentOutput, joyY+joyX*0.5);
-			right->Set(ControlMode::PercentOutput, joyY-joyX*0.5);
+			leftFront->Set(ControlMode::PercentOutput, joyY-joyX*0.5);
+			rightFront->Set(ControlMode::PercentOutput, joyY+joyX*0.5);
 			if(!limitSwitch->Get()){
-				left->Set(ControlMode::PercentOutput, 0.1);
-				right->Set(ControlMode::PercentOutput, 0.1);
+				leftFront->Set(ControlMode::PercentOutput, 0.1);
+				rightFront->Set(ControlMode::PercentOutput, 0.1);
 			}
 		}
 
