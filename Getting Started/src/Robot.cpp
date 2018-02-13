@@ -18,11 +18,17 @@
 #include <DoubleSolenoid.h>
 #include <Compressor.h>
 #include <iostream>
+#include <unistd.h>
+#include <stdio.h>
+
+#include <PowerDistributionPanel.h>
 
 #include <SmartDashboard/SendableChooser.h>
 #include <SmartDashboard/SmartDashboard.h>
 
 #include "ctre/Phoenix.h"
+
+#include <InputControl.h>
 
 #define ARCADE_JOYSTICK 0
 #define ARCADE_PS4 1
@@ -33,6 +39,8 @@ private:
 	//frc::Joystick m_stick{0};
 	frc::LiveWindow& m_lw = *frc::LiveWindow::GetInstance();
 	//frc::Timer m_timer;
+
+	frc::PowerDistributionPanel * power = new PowerDistributionPanel(0);
 
 	//Variable declaration for camera and NetworkTable
 	cs::UsbCamera cam;
@@ -50,6 +58,7 @@ private:
 	Compressor * compressor;
 
 	frc::DoubleSolenoid claw {0, 1};
+	frc::DoubleSolenoid clawWrist {4, 5};
 
 	//Declaration for the joystick and a button that is connected to a DigitalInput port on the RoboRIO
 	Joystick * joy;
@@ -71,8 +80,11 @@ private:
 	int rightTarget;
 
 	bool clawEnabled;
+	bool clawWristEnabled;
 
 	bool killed;
+
+	InputControl * control;
 public:
 	//This function runs every time the robot first turns on, will not run again until it is turned off and back on again
 	Robot() {
@@ -83,17 +95,26 @@ public:
 		leftRear = new VictorSPX(4);
 		rightRear = new VictorSPX(2);
 		arm = new TalonSRX(50);
-		leftClaw = new TalonSRX(10);
-		rightClaw = new TalonSRX(11);
+		leftClaw = new TalonSRX(11);
+		rightClaw = new TalonSRX(10);
 
 		compressor = new Compressor(0);
 		compressor->SetClosedLoopControl(true);
 
-		joy = new Joystick(0);
+		control = new InputControl(ARCADE_PS4);
+		control->SetLeftMotor(leftFront);
+		control->SetRightMotor(rightFront);
+		control->SetArmMotor(arm);
+		control->SetLeftClawMotor(leftClaw);
+		control->SetRightClawMotor(rightClaw);
+		control->SetDriveMultipliers(1.0, 1.0, 0.5, 0.5);
+		control->SetArmMultiplier(1.0);
+
+		joy = control->joy1;
 
 		//Start the camera stream with a resolution of 640x480
-		cam = CameraServer::GetInstance()->StartAutomaticCapture();
-		cam.SetResolution(640, 480);
+		//cam = CameraServer::GetInstance()->StartAutomaticCapture();
+		//cam.SetResolution(640, 480);
 		//CameraServer::GetInstance()->PutVideo("Rectangle", 640, 480);
 		limitSwitch = new frc::DigitalInput(0);
 
@@ -108,7 +129,7 @@ public:
 		leftFront->SetInverted(true);
 		leftRear->SetInverted(true);
 		leftClaw->SetInverted(true);
-		rightClaw->SetInverted(true);
+		arm->SetInverted(false);
 
 		leftFront->EnableVoltageCompensation(true);
 		rightFront->EnableVoltageCompensation(true);
@@ -136,6 +157,9 @@ public:
 		rightTarget = 0;
 
 		clawEnabled = false;
+		clawWristEnabled = false;
+
+
 	}
 
 	void AutonomousInit() override {
@@ -182,10 +206,11 @@ public:
 		// of values specified
 		arm->ConfigSelectedFeedbackSensor(QuadEncoder, PIDLoopIdx, timeoutMs);
 		arm->SetSensorPhase(true);
-		arm->ConfigForwardSoftLimitThreshold(75000, timeoutMs);
-		arm->ConfigReverseSoftLimitThreshold(-160000, timeoutMs);
-		arm->ConfigForwardSoftLimitEnable(true, timeoutMs);
-		arm->ConfigReverseSoftLimitEnable(true, timeoutMs);
+		arm->ConfigForwardSoftLimitThreshold(-135000, timeoutMs);
+		arm->ConfigReverseSoftLimitThreshold(10000, timeoutMs);
+		arm->ConfigForwardSoftLimitEnable(false, timeoutMs);
+		arm->ConfigReverseSoftLimitEnable(false, timeoutMs);
+		arm->SetSelectedSensorPosition(0, 0, timeoutMs);
 
 		// NominalOutput is the default output when the PID loop isn't influencing the motor output, we
 		// want the motor to remain still if it has reached its target, so the nominal output is 0.
@@ -199,7 +224,7 @@ public:
 		arm->Config_kF(PIDLoopIdx, 0.0, timeoutMs);
 		arm->Config_kP(PIDLoopIdx, 0.05, timeoutMs);
 		arm->Config_kI(PIDLoopIdx, 0.000001, timeoutMs);
-		arm->Config_kD(PIDLoopIdx, 11.0, timeoutMs);
+		arm->Config_kD(PIDLoopIdx, 20.0, timeoutMs);
 
 		// These commands setup the encoders for the left and right motors, functions very similarly to
 		// the arm's encoder setup
@@ -235,6 +260,9 @@ public:
 		counter = 0;
 		editTarget = false;
 		clawEnabled = false;
+		clawWristEnabled = false;
+
+		control->armTarget = 0;
 	}
 
 
@@ -298,9 +326,10 @@ public:
 
 		// These following commands output the position, velocity, and target values for all the motors
 		// connected to the robot.
+
 		SmartDashboard::PutNumber("Arm Position", arm->GetSelectedSensorPosition(0));
 		SmartDashboard::PutNumber("Arm Velocity", arm->GetSelectedSensorVelocity(0));
-		SmartDashboard::PutNumber("Arm Target", armTarget);
+		SmartDashboard::PutNumber("Arm Target", control->armTarget);
 
 		SmartDashboard::PutNumber("Left Position", leftFront->GetSelectedSensorPosition(0));
 		SmartDashboard::PutNumber("Left Velocity", leftFront->GetSelectedSensorVelocity(0));
@@ -309,7 +338,17 @@ public:
 		SmartDashboard::PutNumber("Left Target", leftTarget);
 		SmartDashboard::PutNumber("Right Target", rightTarget);
 
+		SmartDashboard::PutNumber("Voltage", power->GetVoltage());
+		SmartDashboard::PutNumber("Current", power->GetTotalCurrent());
+		SmartDashboard::PutNumber("Temperature", power->GetTemperature());
+		SmartDashboard::PutNumber("Power", power->GetTotalPower());
+		SmartDashboard::PutNumber("Energy", power->GetTotalEnergy());
+
+		SmartDashboard::PutNumber("STAGE", 1);
+
+		//SmartDashboard::PutNumber("Joystick 2", control->joy1->GetX());
 		if(!killed){
+			SmartDashboard::PutNumber("STAGE", 2);
 			if (auton){
 				// This command gets the information about the targeted object from the
 				// NetworkTable, and stores it in the variable "contour"
@@ -370,6 +409,7 @@ public:
 					rightFront->Set(ControlMode::PercentOutput, 0);
 				}
 			} else if(PIDControl){
+				SmartDashboard::PutNumber("STAGE", 3);
 				double joyX = joy->GetX();
 				double joyY = joy->GetY();
 				double joyZ = joy->GetZ();
@@ -390,256 +430,96 @@ public:
 					armTarget += joyZ*2500;
 				}
 			} else {
-				double joyX = joy->GetX();
-				double joyY = joy->GetY();
-				double joyZ = joy->GetZ();
-				//joyX = 0;
-				//joyY = 0;
-				//joyZ = 0;
-				leftFront->Set(ControlMode::PercentOutput, joyY-joyX*0.5);
-				rightFront->Set(ControlMode::PercentOutput, joyY+joyX*0.5);
-				arm->Set(ControlMode::PercentOutput, joyZ);
+				SmartDashboard::PutNumber("STAGE", 4);
+				control->Drive();
+				SmartDashboard::PutNumber("STAGE", 5);
+				control->MoveArm();
+				SmartDashboard::PutNumber("STAGE", 6);
+
+				if(control->GetButtonLower()){
+					control->armTarget = -10000;
+				}
+				if(control->GetButtonRaise()){
+					control->armTarget = -100000;
+				}
+				SmartDashboard::PutNumber("STAGE", 7);
 
 				//Claw Motors
-				if(joy->GetRawButton(11)){
+				if(control->GetButtonClawSuck()){
 					leftClaw->Set(ControlMode::PercentOutput, 0.5);
 					rightClaw->Set(ControlMode::PercentOutput, 0.5);
-				} else if(joy->GetRawButton(13)){
+				} else if(control->GetButtonClawSpit()){
 					leftClaw->Set(ControlMode::PercentOutput, -1.0);
 					rightClaw->Set(ControlMode::PercentOutput, -1.0);
 				} else {
 					leftClaw->Set(ControlMode::PercentOutput, 0.1);
 					rightClaw->Set(ControlMode::PercentOutput, 0.1);
 				}
+				SmartDashboard::PutNumber("STAGE", 8);
 
 				if(!limitSwitch->Get()){
 					leftFront->Set(ControlMode::PercentOutput, 0.1);
 					rightFront->Set(ControlMode::PercentOutput, 0.1);
 				}
+				SmartDashboard::PutNumber("STAGE", 9);
 
 				//Claw Pneumatics
-				if(joy->GetRawButtonPressed(1)){
+				if(control->GetButtonClawToggle()){
 					clawEnabled = !clawEnabled;
 				}
+				SmartDashboard::PutNumber("STAGE", 10);
+				if(control->GetButtonClawWristToggle()){
+					clawWristEnabled = !clawWristEnabled;
+				}
+				SmartDashboard::PutNumber("STAGE", 11);
 
 				if(clawEnabled){
 					claw.Set(frc::DoubleSolenoid::Value::kReverse);
 				} else {
 					claw.Set(frc::DoubleSolenoid::Value::kForward);
 				}
+				SmartDashboard::PutNumber("STAGE", 12);
 
+				if(clawWristEnabled){
+					clawWrist.Set(frc::DoubleSolenoid::Value::kReverse);
+				} else {
+					clawWrist.Set(frc::DoubleSolenoid::Value::kForward);
+				}
+				SmartDashboard::PutNumber("STAGE", 13);
 
 			}
 
-			if(joy->GetRawButtonPressed(3)){
+			if(control->GetButtonAuton()){
 				auton = !auton;
 				counter = 0;
 			}
-			if(joy->GetRawButtonPressed(4)){
+			SmartDashboard::PutNumber("STAGE", 14);
+			if(control->GetButtonPID()){
 				PIDControl = !PIDControl;
 				leftFront->SetSelectedSensorPosition(0, 0, 10);
 				rightFront->SetSelectedSensorPosition(0, 0, 10);
 				leftTarget = 0;
 				rightTarget = 0;
 			}
-			if(joy->GetRawButtonPressed(5)){
-				arm->SetSelectedSensorPosition(-160000, 0, 10);
+			SmartDashboard::PutNumber("STAGE", 15);
+			if(control->GetButtonArmCalibrate()){
+
 			}
+			SmartDashboard::PutNumber("STAGE", 16);
 
 			//KILL SWITCH
-			if(joy->GetRawButtonPressed(6)){
+			if(control->GetButtonKill()){
 				killed = true;
 				leftFront->Set(ControlMode::PercentOutput, 0.0);
 				rightFront->Set(ControlMode::PercentOutput, 0.0);
 				arm->Set(ControlMode::PercentOutput, 0.0);
 			}
+			SmartDashboard::PutNumber("STAGE", 17);
 		}
 
 	}
 
 	void TestPeriodic() override {}
-};
-
-class InputControls{
-private:
-	Joystick * joy1;
-	Joystick * joy2 = 0;
-
-	TalonSRX * left = 0;
-	TalonSRX * right = 0;
-	TalonSRX * arm = 0;
-	TalonSRX * leftClaw = 0;
-	TalonSRX * rightClaw = 0;
-
-	double leftThrottleMult = 1.0;
-	double rightThrottleMult = 1.0;
-	double leftTurnMult = 1.0;
-	double rightTurnMult = 1.0;
-	double armMult = 1.0;
-
-	int mode;
-
-public:
-	InputControls(Joystick * joy, int type){
-		this->joy1 = joy;
-		mode = type;
-	}
-	InputControls(Joystick * joy1, Joystick * joy2, int type){
-		this->joy1 = joy1;
-		this->joy2 = joy2;
-		mode = type;
-	}
-
-	void SetLeftMotor(TalonSRX * left){
-		this->left = left;
-	}
-	void SetRightMotor(TalonSRX * right){
-		this->right = right;
-	}
-	void SetArmMotor(TalonSRX * arm){
-		this->arm = arm;
-	}
-	void SetLeftClawMotor(TalonSRX * leftClaw){
-		this->leftClaw = leftClaw;
-	}
-	void SetRightClawMotor(TalonSRX * rightClaw){
-		this->rightClaw = rightClaw;
-	}
-	void SetLeftThrottleMult(double leftThrottleMult){
-		this->leftThrottleMult = leftThrottleMult;
-	}
-	void SetRightThrottleMult(double rightThrottleMult){
-		this->rightThrottleMult = rightThrottleMult;
-	}
-	void SetLeftTurnMult(double leftTurnMult){
-		this->leftTurnMult = leftTurnMult;
-	}
-	void SetRightTurnMult(double rightTurnMult){
-		this->rightTurnMult = rightTurnMult;
-	}
-	void SetDriveMultipliers(double leftThrottleMult, double rightThrottleMult, double leftTurnMult, double rightTurnMult){
-		this->leftThrottleMult = leftThrottleMult;
-		this->rightThrottleMult = rightThrottleMult;
-		this->leftTurnMult = leftTurnMult;
-		this->rightTurnMult = rightTurnMult;
-	}
-	void SetArmMultiplier(double armMult){
-		this->armMult = armMult;
-	}
-
-
-	double GetAxisLeftThrottle(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetY();
-		case ARCADE_PS4:
-			return joy1->GetY();
-		}
-	}
-	double GetAxisRightThrottle(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetY();
-		case ARCADE_PS4:
-			return joy1->GetY();
-		}
-	}
-	double GetAxisLeftTurn(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetX();
-		case ARCADE_PS4:
-			return joy1->GetX();
-		}
-	}
-	double GetAxisRightTurn(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetX();
-		case ARCADE_PS4:
-			return joy1->GetX();
-		}
-	}
-	double GetAxisArm(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetZ();
-		case ARCADE_PS4:
-			return joy1->GetRawAxis(5);
-		}
-	}
-	bool GetButtonClawToggle(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetRawButton(1);
-		case ARCADE_PS4:
-			return joy1->GetRawButton(2);
-		}
-	}
-	bool GetButtonClawSuck(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetRawButton(13);
-		case ARCADE_PS4:
-			int angle = joy1->GetPOV(0);
-			return (angle == 225 || angle == 180 || angle == 225);
-		}
-	}
-	bool GetButtonClawSpit(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetRawButton(11);
-		case ARCADE_PS4:
-			int angle = joy1->GetPOV(0);
-			return (angle == 0 || angle == 315 || angle == 45);
-		}
-	}
-	bool GetButtonKill(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetRawButton(6);
-		case ARCADE_PS4:
-			return joy1->GetRawButton(13);
-		}
-	}
-	bool GetButtonArmCalibrate(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetRawButton(5);
-		case ARCADE_PS4:
-			return joy1->GetRawButton(9);
-		}
-	}
-	bool GetButtonAuton(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetRawButton(3);
-		case ARCADE_PS4:
-			return joy1->GetRawButton(5);
-		}
-	}
-	bool GetButtonPID(){
-		switch(mode){
-		case ARCADE_JOYSTICK:
-			return joy1->GetRawButton(4);
-		case ARCADE_PS4:
-			return joy1->GetRawButton(6);
-		}
-	}
-
-	void Drive(){
-		double leftThrottle = this->GetAxisLeftThrottle() * this->leftThrottleMult;
-		double rightThrottle = this->GetAxisRightThrottle() * this->rightThrottleMult;
-		double leftTurn = this->GetAxisLeftTurn() * this->leftTurnMult;
-		double rightTurn = this->GetAxisRightTurn() * this->rightTurnMult;
-		this->left->Set(ControlMode::PercentOutput, leftThrottle - leftTurn);
-		this->right->Set(ControlMode::PercentOutput, rightThrottle - rightTurn);
-	}
-
-	void MoveArm(){
-		double armPower = this->GetAxisArm() * this->armMult;
-		this->arm->Set(ControlMode::PercentOutput, armPower);
-	}
 };
 
 START_ROBOT_CLASS(Robot)
