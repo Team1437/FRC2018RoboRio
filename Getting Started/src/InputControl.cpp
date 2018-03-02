@@ -37,6 +37,18 @@ InputControl::InputControl(int type){
 		joy1 = new frc::Joystick(0);
 		joy2 = new frc::Joystick(1);
 		break;
+	case ARCADE_LOGITECH:
+		joy1 = new frc::Joystick(3);
+		joy2 = joy1;
+		break;
+	case TANK_LOGITECH:
+		joy1 = new frc::Joystick(3);
+		joy2 = joy1;
+		break;
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		joy1 = new frc::Joystick(3);
+		joy2 = new frc::Joystick(1);
+		break;
 	default:
 		break;
 	}
@@ -80,6 +92,10 @@ void InputControl::SetArmMultiplier(double armMult){
 	this->armMult = armMult;
 }
 
+void InputControl::SetThrottleSetPoint(){
+	this->throttleSetPoint = this->GetRawAxisArm();
+}
+
 double InputControl::GetRawAxisLeftThrottle(){
 	switch(mode){
 	case ARCADE_JOYSTICK:
@@ -94,6 +110,12 @@ double InputControl::GetRawAxisLeftThrottle(){
 		return joy1->GetY();
 	case JOYSTICK_THROTTLE:
 		return joy1->GetY();
+	case ARCADE_LOGITECH:
+		return joy1->GetRawAxis(1);
+	case TANK_LOGITECH:
+		return joy1->GetRawAxis(1);
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy1->GetRawAxis(1);
 	default:
 		return 0.0;
 	}
@@ -112,6 +134,12 @@ double InputControl::GetRawAxisRightThrottle(){
 		return joy1->GetY();
 	case JOYSTICK_THROTTLE:
 		return joy1->GetY();
+	case ARCADE_LOGITECH:
+		return joy1->GetRawAxis(1);
+	case TANK_LOGITECH:
+		return joy1->GetRawAxis(5);
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy1->GetRawAxis(1);
 	default:
 		return 0.0;
 	}
@@ -121,7 +149,7 @@ double InputControl::GetRawAxisLeftTurn(){
 	case ARCADE_JOYSTICK:
 		return joy1->GetX();
 	case ARCADE_PS4:
-		return joy1->GetX();
+		return joy1->GetRawAxis(2);
 	case TANK_JOYSTICK:
 		return 0.0;
 	case TANK_PS4:
@@ -130,6 +158,12 @@ double InputControl::GetRawAxisLeftTurn(){
 		return joy1->GetX();
 	case JOYSTICK_THROTTLE:
 		return joy1->GetX();
+	case ARCADE_LOGITECH:
+		return joy1->GetRawAxis(4);
+	case TANK_LOGITECH:
+		return 0.0;
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy1->GetRawAxis(4);
 	default:
 		return 0.0;
 	}
@@ -139,7 +173,7 @@ double InputControl::GetRawAxisRightTurn(){
 	case ARCADE_JOYSTICK:
 		return joy1->GetX();
 	case ARCADE_PS4:
-		return joy1->GetX();
+		return joy1->GetRawAxis(2);
 	case TANK_JOYSTICK:
 		return 0.0;
 	case TANK_PS4:
@@ -148,6 +182,12 @@ double InputControl::GetRawAxisRightTurn(){
 		return joy1->GetX();
 	case JOYSTICK_THROTTLE:
 		return joy1->GetX();
+	case ARCADE_LOGITECH:
+		return joy1->GetRawAxis(4);
+	case TANK_LOGITECH:
+		return 0.0;
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy1->GetRawAxis(4);
 	default:
 		return 0.0;
 	}
@@ -158,31 +198,35 @@ double InputControl::GetRawAxisArm(){
 		return joy1->GetZ();
 	case ARCADE_PS4:
 	{
-		double val = joy1->GetRawAxis(5);
-		if(abs(val) < 0.001){
-			val = 0.0;
+		int angle = joy1->GetPOV(0);
+		bool down = (angle == 225 || angle == 180 || angle == 135);
+		bool up = (angle == 0 || angle == 315 || angle == 45);
+		int change = 250;
+		if(up){
+			this->armTarget = this->armTarget - change;
 		}
-		this->armTarget = this->armTarget + val * 750;
+		if(down){
+			this->armTarget = this->armTarget + change;
+		}
 		return this->armTarget;
-		//return joy1->GetRawAxis(5);
 	}
 	case TANK_JOYSTICK:
 		return joy1->GetZ();
 	case TANK_PS4:
 	{
-		double val = 0.0;
-		bool leftTrigger = joy1->GetRawButton(7);
-		bool rightTrigger = joy1->GetRawButton(8);
-		if(leftTrigger && rightTrigger){
-			val = 0.0;
-		} else if(leftTrigger){
-			val = (joy1->GetRawAxis(3) + 1.0)/2.0;
-		} else if(rightTrigger){
-			val = (joy1->GetRawAxis(4) + 1.0)/2.0;
-			val = val * -1;
+		int angle = joy1->GetPOV(0);
+		bool down = (angle == 225 || angle == 180 || angle == 135);
+		bool up = (angle == 0 || angle == 315 || angle == 45);
+		int change = 250;
+		if(up){
+			this->armTarget = this->armTarget - change;
 		}
-		return val;
+		if(down){
+			this->armTarget = this->armTarget + change;
+		}
+		return this->armTarget;
 	}
+	return joy1->GetRawAxis(5);
 	case DUAL_JOYSTICK:
 		return joy2->GetY();
 	case JOYSTICK_THROTTLE:
@@ -197,6 +241,36 @@ double InputControl::GetRawAxisArm(){
 		double target = min + ((max - min)/(joyMax - joyMin))* (val - joyMin);
 		return target;
 	}
+	case ARCADE_LOGITECH:
+	{
+		int angle = joy1->GetPOV(0);
+		bool down = (angle == 225 || angle == 180 || angle == 135);
+		bool up = (angle == 0 || angle == 315 || angle == 45);
+		double active = 0.0;
+		if(up){
+			active = -1.0;
+		}
+		if(down){
+			active = 1.0;
+		}
+		return active;
+	}
+	case TANK_LOGITECH:
+	{
+		int angle = joy1->GetPOV(0);
+		bool down = (angle == 225 || angle == 180 || angle == 135);
+		bool up = (angle == 0 || angle == 315 || angle == 45);
+		double active = 0.0;
+		if(up){
+			active = -1.0;
+		}
+		if(down){
+			active = 1.0;
+		}
+		return active;
+	}
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return -1*joy2->GetX();
 	default:
 		return 0.0;
 	}
@@ -214,42 +288,111 @@ double InputControl::GetAxisLeftTurn(){
 double InputControl::GetAxisRightTurn(){
 	return this->GetRawAxisRightTurn() * this->rightTurnMult;
 }
-double InputControl::GetAxisArm(){
-	return this->GetRawAxisArm() * this->armMult;
+int InputControl::GetAxisArmChange(){
+	switch(mode){
+	case ARCADE_JOYSTICK:
+		return 0;
+	case ARCADE_PS4:
+		return 0;
+	case TANK_JOYSTICK:
+		return 0;
+	case TANK_PS4:
+		return 0;
+	case DUAL_JOYSTICK:
+		return 0;
+	case JOYSTICK_THROTTLE:
+		return 0;
+	case ARCADE_LOGITECH:
+		return this->GetRawAxisArm()*this->armMult;
+	case TANK_LOGITECH:
+		return this->GetRawAxisArm()*this->armMult;
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+	{
+		double val = this->GetRawAxisArm();
+		double range = 50;
+		double joyMin = -1.0;
+		double joyMax = 1.0;
+		double min = range;
+		double max = -1*range;
+		double x = throttleSetPoint - (max * joyMin - min * joyMax)/(max - min);
+		double change = min + ((max - min)/(joyMax - joyMin))* (val - (joyMin + x));
+		return change;
+	}
+	default:
+		return 0.0;
+	}
+}
+
+bool InputControl::GetButtonClawTogglePressed(){
+	switch(mode){
+	case ARCADE_JOYSTICK:
+		return joy1->GetRawButtonPressed(1);
+	case ARCADE_PS4:
+		return joy1->GetRawButtonPressed(6);
+	case TANK_JOYSTICK:
+		return joy1->GetRawButtonPressed(1);
+	case TANK_PS4:
+		return joy1->GetRawButtonPressed(6);
+	case DUAL_JOYSTICK:
+		return joy1->GetRawButtonPressed(1);
+	case JOYSTICK_THROTTLE:
+		return joy1->GetRawButtonPressed(1);
+	case ARCADE_LOGITECH:
+		return joy1->GetRawButtonPressed(6);
+	case TANK_LOGITECH:
+		return joy1->GetRawButtonPressed(6);
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy2->GetRawButtonPressed(4);
+	default:
+		return false;
+	}
 }
 
 bool InputControl::GetButtonClawToggle(){
 	switch(mode){
 	case ARCADE_JOYSTICK:
-		return joy1->GetRawButtonPressed(1);
+		return joy1->GetRawButton(1);
 	case ARCADE_PS4:
-		return joy1->GetRawButtonPressed(2);
+		return joy1->GetRawButton(6);
 	case TANK_JOYSTICK:
-		return joy1->GetRawButtonPressed(1);
+		return joy1->GetRawButton(1);
 	case TANK_PS4:
-		return joy1->GetRawButtonPressed(2);
+		return joy1->GetRawButton(6);
 	case DUAL_JOYSTICK:
-		return joy1->GetRawButtonPressed(1);
+		return joy1->GetRawButton(1);
 	case JOYSTICK_THROTTLE:
-		return joy1->GetRawButtonPressed(1);
+		return joy1->GetRawButton(1);
+	case ARCADE_LOGITECH:
+		return joy1->GetRawButton(6);
+	case TANK_LOGITECH:
+		return joy1->GetRawButton(6);
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy2->GetRawButton(4);
 	default:
 		return false;
 	}
 }
+
 bool InputControl::GetButtonClawWristToggle(){
 	switch(mode){
 	case ARCADE_JOYSTICK:
 		return joy1->GetRawButtonPressed(2);
 	case ARCADE_PS4:
-		return joy1->GetRawButtonPressed(4);
+		return joy1->GetRawButtonPressed(1);
 	case TANK_JOYSTICK:
 		return joy1->GetRawButtonPressed(2);
 	case TANK_PS4:
-		return joy1->GetRawButtonPressed(4);
+		return joy1->GetRawButtonPressed(1);
 	case DUAL_JOYSTICK:
 		return joy1->GetRawButtonPressed(2);
 	case JOYSTICK_THROTTLE:
 		return joy1->GetRawButtonPressed(2);
+	case ARCADE_LOGITECH:
+		return joy1->GetRawButtonPressed(3);
+	case TANK_LOGITECH:
+		return joy1->GetRawButtonPressed(3);
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy2->GetRawButtonPressed(5);
 	default:
 		return false;
 	}
@@ -259,45 +402,75 @@ bool InputControl::GetButtonClawSuck(){
 	case ARCADE_JOYSTICK:
 		return joy1->GetRawButton(13);
 	case ARCADE_PS4:
-	{
-		int angle = joy1->GetPOV(0);
-		return (angle == 225 || angle == 180 || angle == 135);
-	}
+		return joy1->GetRawButton(8);
 	case TANK_JOYSTICK:
 		return joy1->GetRawButton(13);
 	case TANK_PS4:
-	{
-		int angle = joy1->GetPOV(0);
-		return (angle == 225 || angle == 180 || angle == 135);
-	}
+		return joy1->GetRawButton(8);
+		//case FPS_PS4:
+		//	return joy1->GetRawButton(7);
 	case DUAL_JOYSTICK:
 		return joy1->GetRawButton(13);
 	case JOYSTICK_THROTTLE:
 		return joy1->GetRawButton(13);
+	case ARCADE_LOGITECH:
+		return joy1->GetRawAxis(3) > 0.3;
+	case TANK_LOGITECH:
+		return joy1->GetRawAxis(3) > 0.3;
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy2->GetRawButtonPressed(3);
 	default:
 		return false;
 	}
 }
-bool InputControl::GetButtonClawSpit(){
+bool InputControl::GetButtonClawSpitFast(){
 	switch(mode){
 	case ARCADE_JOYSTICK:
 		return joy1->GetRawButton(11);
 	case ARCADE_PS4:
-	{
-		int angle = joy1->GetPOV(0);
-		return (angle == 0 || angle == 315 || angle == 45);
-	}
+		return joy1->GetRawButton(5);
 	case TANK_JOYSTICK:
 		return joy1->GetRawButton(11);
 	case TANK_PS4:
-	{
-		int angle = joy1->GetPOV(0);
-		return (angle == 0 || angle == 315 || angle == 45);
-	}
+		return joy1->GetRawButton(5);
+		//case FPS_PS4:
+		//	return joy1->GetRawButton(8);
 	case DUAL_JOYSTICK:
 		return joy1->GetRawButton(11);
 	case JOYSTICK_THROTTLE:
 		return joy1->GetRawButton(11);
+	case ARCADE_LOGITECH:
+		return joy1->GetRawButton(5);
+	case TANK_LOGITECH:
+		return joy1->GetRawButton(5);
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy2->GetRawButtonPressed(2);
+	default:
+		return false;
+	}
+}
+bool InputControl::GetButtonClawSpitSlow(){
+	switch(mode){
+	case ARCADE_JOYSTICK:
+		return joy1->GetRawButton(11);
+	case ARCADE_PS4:
+		return joy1->GetRawButton(7);
+	case TANK_JOYSTICK:
+		return joy1->GetRawButton(11);
+	case TANK_PS4:
+		return joy1->GetRawButton(7);
+		//case FPS_PS4:
+		//	return false;
+	case DUAL_JOYSTICK:
+		return joy1->GetRawButton(11);
+	case JOYSTICK_THROTTLE:
+		return joy1->GetRawButton(11);
+	case ARCADE_LOGITECH:
+		return joy1->GetRawAxis(2) > 0.3;
+	case TANK_LOGITECH:
+		return joy1->GetRawAxis(2) > 0.3;
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy2->GetRawButtonPressed(1);
 	default:
 		return false;
 	}
@@ -312,10 +485,18 @@ bool InputControl::GetButtonKill(){
 		return joy1->GetRawButtonPressed(6);
 	case TANK_PS4:
 		return joy1->GetRawButtonPressed(13);
+		//case FPS_PS4:
+		//	return joy1->GetRawButtonPressed(13);
 	case DUAL_JOYSTICK:
 		return joy1->GetRawButtonPressed(6);
 	case JOYSTICK_THROTTLE:
 		return joy1->GetRawButtonPressed(6);
+	case ARCADE_LOGITECH:
+		return joy1->GetRawButtonPressed(8);
+	case TANK_LOGITECH:
+		return joy1->GetRawButtonPressed(8);
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy1->GetRawButtonPressed(8);
 	default:
 		return false;
 	}
@@ -325,15 +506,23 @@ bool InputControl::GetButtonArmCalibrate(){
 	case ARCADE_JOYSTICK:
 		return joy1->GetRawButtonPressed(5);
 	case ARCADE_PS4:
-		return joy1->GetRawButtonPressed(9);
+		return false;
 	case TANK_JOYSTICK:
 		return joy1->GetRawButtonPressed(5);
 	case TANK_PS4:
-		return joy1->GetRawButtonPressed(9);
+		return false;
+		//case FPS_PS4:
+		//	return joy1->GetRawButtonPressed(9);
 	case DUAL_JOYSTICK:
 		return joy1->GetRawButtonPressed(5);
 	case JOYSTICK_THROTTLE:
 		return joy1->GetRawButtonPressed(5);
+	case ARCADE_LOGITECH:
+		return false;
+	case TANK_LOGITECH:
+		return false;
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return false;
 	default:
 		return false;
 	}
@@ -343,15 +532,23 @@ bool InputControl::GetButtonAuton(){
 	case ARCADE_JOYSTICK:
 		return joy1->GetRawButtonPressed(3);
 	case ARCADE_PS4:
-		return joy1->GetRawButtonPressed(5);
+		return false;
 	case TANK_JOYSTICK:
 		return joy1->GetRawButtonPressed(3);
 	case TANK_PS4:
-		return joy1->GetRawButtonPressed(5);
+		return false;
+		//case FPS_PS4:
+		//	return joy1->GetRawButtonPressed(5);
 	case DUAL_JOYSTICK:
 		return joy1->GetRawButtonPressed(3);
 	case JOYSTICK_THROTTLE:
 		return joy1->GetRawButtonPressed(3);
+	case ARCADE_LOGITECH:
+		return false;
+	case TANK_LOGITECH:
+		return false;
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return false;
 	default:
 		return false;
 	}
@@ -361,59 +558,145 @@ bool InputControl::GetButtonPID(){
 	case ARCADE_JOYSTICK:
 		return joy1->GetRawButtonPressed(4);
 	case ARCADE_PS4:
-		return joy1->GetRawButtonPressed(6);
+		return false;
 	case TANK_JOYSTICK:
 		return joy1->GetRawButtonPressed(4);
 	case TANK_PS4:
-		return joy1->GetRawButtonPressed(6);
+		return false;
 	case DUAL_JOYSTICK:
 		return joy1->GetRawButtonPressed(4);
+		//case FPS_PS4:
+		//	return joy1->GetRawButtonPressed(6);
 	case JOYSTICK_THROTTLE:
 		return joy1->GetRawButtonPressed(4);
+	case ARCADE_LOGITECH:
+		return false;
+	case TANK_LOGITECH:
+		return false;
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return false;
 	default:
 		return false;
 	}
 
 }
 
-bool InputControl::GetButtonLower(){
+bool InputControl::GetButtonArmLow(){
 	switch(mode){
 	case ARCADE_JOYSTICK:
 		return joy1->GetRawButtonPressed(7);
 	case ARCADE_PS4:
-		return joy1->GetRawButtonPressed(10);
+		return joy1->GetRawButtonPressed(2);
 	case TANK_JOYSTICK:
 		return joy1->GetRawButtonPressed(7);
 	case TANK_PS4:
-		return joy1->GetRawButtonPressed(10);
+		return joy1->GetRawButtonPressed(2);
+		//case FPS_PS4:
+		//	return joy1->GetRawButtonPressed(2);
 	case DUAL_JOYSTICK:
 		return joy1->GetRawButtonPressed(7);
 	case JOYSTICK_THROTTLE:
 		return joy1->GetRawButtonPressed(7);
+	case ARCADE_LOGITECH:
+		return joy1->GetRawButtonPressed(1);
+	case TANK_LOGITECH:
+		return joy1->GetRawButtonPressed(1);
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy2->GetRawButtonPressed(7) || joy2->GetRawButtonPressed(6);
+	default:
+		return false;
+	}
+
+}
+bool InputControl::GetButtonArmMid(){
+	switch(mode){
+	case ARCADE_JOYSTICK:
+		return joy1->GetRawButtonPressed(9);
+	case ARCADE_PS4:
+		return joy1->GetRawButtonPressed(3);
+	case TANK_JOYSTICK:
+		return joy1->GetRawButtonPressed(9);
+	case TANK_PS4:
+		return joy1->GetRawButtonPressed(3);
+		//case FPS_PS4:
+		//	return joy1->GetRawButtonPressed(3);
+	case DUAL_JOYSTICK:
+		return joy1->GetRawButtonPressed(9);
+	case JOYSTICK_THROTTLE:
+		return joy1->GetRawButtonPressed(9);
+	case ARCADE_LOGITECH:
+		return joy1->GetRawButtonPressed(2);
+	case TANK_LOGITECH:
+		return joy1->GetRawButtonPressed(2);
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy2->GetRawButtonPressed(8) || joy2->GetRawButtonPressed(9);
 	default:
 		return false;
 	}
 
 }
 
-bool InputControl::GetButtonRaise(){
+bool InputControl::GetButtonArmHigh(){
 	switch(mode){
 	case ARCADE_JOYSTICK:
 		return joy1->GetRawButtonPressed(9);
 	case ARCADE_PS4:
-		return joy1->GetRawButtonPressed(9);
+		return joy1->GetRawButtonPressed(4);
 	case TANK_JOYSTICK:
 		return joy1->GetRawButtonPressed(9);
 	case TANK_PS4:
-		return joy1->GetRawButtonPressed(9);
+		return joy1->GetRawButtonPressed(4);
+		//case FPS_PS4:
+		//	return joy1->GetRawButtonPressed(4);
 	case DUAL_JOYSTICK:
 		return joy1->GetRawButtonPressed(9);
 	case JOYSTICK_THROTTLE:
 		return joy1->GetRawButtonPressed(9);
+	case ARCADE_LOGITECH:
+		return joy1->GetRawButtonPressed(4);
+	case TANK_LOGITECH:
+		return joy1->GetRawButtonPressed(4);
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		return joy2->GetRawButtonPressed(10) || joy2->GetRawButtonPressed(11);
 	default:
 		return false;
 	}
 
+}
+
+void InputControl::ToggleMode(){
+	switch(mode){
+	case ARCADE_JOYSTICK:
+		break;
+	case ARCADE_PS4:
+		break;
+	case TANK_JOYSTICK:
+		break;
+	case TANK_PS4:
+		break;
+	case DUAL_JOYSTICK:
+		break;
+	case JOYSTICK_THROTTLE:
+		break;
+	case ARCADE_LOGITECH:
+	{
+		if(joy1->GetRawButtonPressed(7)){
+			this->mode = TANK_LOGITECH;
+		}
+		break;
+	}
+	case TANK_LOGITECH:
+	{
+		if(joy1->GetRawButtonPressed(7)){
+			this->mode = ARCADE_LOGITECH;
+		}
+		break;
+	}
+	case DUAL_DRIVER_LOGITECH_THROTTLE:
+		break;
+	default:
+		break;
+	}
 }
 
 int InputControl::GetMode(){
@@ -431,14 +714,14 @@ void InputControl::Drive(){
 
 void InputControl::MoveArm(){
 	if(mode == JOYSTICK_THROTTLE){
-		int target = (int) this->GetAxisArm();
+		int target = (int) this->GetRawAxisArm();
 		this->arm->Set(ControlMode::Position, target);
 	} else if (mode == ARCADE_PS4){
 		int target = this->GetRawAxisArm();
 		this->arm->Set(ControlMode::Position, target);
 	}
-		else {
-		double armPower = this->GetAxisArm();
+	else {
+		double armPower = this->GetRawAxisArm();
 		this->arm->Set(ControlMode::PercentOutput, armPower);
 	}
 }

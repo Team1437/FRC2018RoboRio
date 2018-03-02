@@ -28,7 +28,10 @@
 
 #include "ctre/Phoenix.h"
 
+#include <pathfinder.h>
+
 #include <InputControl.h>
+#include <RobotLogic.h>
 
 #define ARCADE_JOYSTICK 0
 #define ARCADE_PS4 1
@@ -47,18 +50,18 @@ private:
 	std::shared_ptr<nt::NetworkTable> table;
 
 	//Variable declaration for all the motors
-	TalonSRX * leftFront;
-	TalonSRX * rightFront;
-	VictorSPX * leftRear;
-	VictorSPX * rightRear;
+	TalonSRX * leftRear;
+	TalonSRX * rightRear;
+	VictorSPX * leftFront;
+	VictorSPX * rightFront;
 	TalonSRX * arm;
-	TalonSRX * leftClaw;
+	VictorSPX * leftClaw;
 	TalonSRX * rightClaw;
 
 	Compressor * compressor;
 
 	frc::DoubleSolenoid claw {0, 1};
-	frc::DoubleSolenoid clawWrist {4, 5};
+	frc::DoubleSolenoid clawWrist {2, 3};
 
 	//Declaration for the joystick and a button that is connected to a DigitalInput port on the RoboRIO
 	Joystick * joy;
@@ -85,36 +88,52 @@ private:
 	bool killed;
 
 	InputControl * control;
+	RobotLogic * bot;
 public:
 	//This function runs every time the robot first turns on, will not run again until it is turned off and back on again
 	Robot() {
 
 		//Initialize the motors with their respective ID's on the CAN bus
-		leftFront = new TalonSRX(1);
-		rightFront = new TalonSRX(3);
-		leftRear = new VictorSPX(4);
-		rightRear = new VictorSPX(2);
-		arm = new TalonSRX(50);
-		leftClaw = new TalonSRX(11);
-		rightClaw = new TalonSRX(10);
+		leftFront = new VictorSPX(3);
+		rightFront = new VictorSPX(7);
+		leftRear = new TalonSRX(4);
+		rightRear = new TalonSRX(8);
+		arm = new TalonSRX(6);
+		leftClaw = new VictorSPX(5);
+		rightClaw = new TalonSRX(2);
 
 		compressor = new Compressor(0);
 		compressor->SetClosedLoopControl(true);
 
-		control = new InputControl(ARCADE_PS4);
-		control->SetLeftMotor(leftFront);
-		control->SetRightMotor(rightFront);
-		control->SetArmMotor(arm);
-		control->SetLeftClawMotor(leftClaw);
-		control->SetRightClawMotor(rightClaw);
+		control = new InputControl(ARCADE_LOGITECH);
+		//control->SetLeftMotor(leftFront);
+		//control->SetRightMotor(rightFront);
+		//control->SetArmMotor(arm);
+		//control->SetLeftClawMotor(leftClaw);
+		//control->SetRightClawMotor(rightClaw);
 		control->SetDriveMultipliers(1.0, 1.0, 0.5, 0.5);
-		control->SetArmMultiplier(1.0);
+		control->SetArmMultiplier(6.0);
+
+		bot = new RobotLogic(control);
+		bot->SetLeftMasterMotor(leftRear);
+		bot->SetLeftFollowerMotor(leftFront);
+		bot->SetRightMasterMotor(rightRear);
+		bot->SetRightFollowerMotor(rightFront);
+		bot->SetArmMotor(arm);
+		bot->SetLeftClawMotor(leftClaw);
+		bot->SetRightClawMotor(rightClaw);
+		bot->SetClaw(&claw);
+		bot->SetClawWrist(&clawWrist);
+
+		bot->InitializeMotors();
+
+
 
 		joy = control->joy1;
 
 		//Start the camera stream with a resolution of 640x480
-		//cam = CameraServer::GetInstance()->StartAutomaticCapture();
-		//cam.SetResolution(640, 480);
+		cam = CameraServer::GetInstance()->StartAutomaticCapture();
+		cam.SetResolution(640, 480);
 		//CameraServer::GetInstance()->PutVideo("Rectangle", 640, 480);
 		limitSwitch = new frc::DigitalInput(0);
 
@@ -126,21 +145,27 @@ public:
 		// -- Set the rear motors to mimic any commands sent to the front motors, this is done since
 		//    all the motors on one side are connected to the same chain and need to be doign the same
 		//    commands as each other
-		leftFront->SetInverted(true);
-		leftRear->SetInverted(true);
-		leftClaw->SetInverted(true);
-		arm->SetInverted(false);
+		//leftFront->SetInverted(true);
+		//leftRear->SetInverted(true);
+		//leftClaw->SetInverted(true);
+		//arm->SetInverted(false);
 
-		leftFront->EnableVoltageCompensation(true);
+		/*leftFront->EnableVoltageCompensation(true);
 		rightFront->EnableVoltageCompensation(true);
 		leftRear->EnableVoltageCompensation(true);
 		rightRear->EnableVoltageCompensation(true);
-		arm->EnableVoltageCompensation(true);
-		leftClaw->EnableVoltageCompensation(true);
-		rightClaw->EnableVoltageCompensation(true);
+		arm->EnableVoltageCompensation(true);*/
+		//leftClaw->EnableVoltageCompensation(true);
+		//rightClaw->EnableVoltageCompensation(true);
 
-		rightRear->Set(ControlMode::Follower, 3);
-		leftRear->Set(ControlMode::Follower, 1);
+		//rightRear->Set(ControlMode::Follower, 3);
+		//leftRear->Set(ControlMode::Follower, 1);
+
+		//leftRear->SetInverted(true);
+		//leftFront->SetInverted(true);
+
+		//rightFront->Set(ControlMode::Follower, 8);
+		//leftFront->Set(ControlMode::Follower, 3);
 
 		// Setup variables for auton (follow ball) mode
 		auton = false;
@@ -160,6 +185,10 @@ public:
 		clawWristEnabled = false;
 
 
+
+	}
+
+	void RobotInit() override {
 	}
 
 	void AutonomousInit() override {
@@ -176,83 +205,17 @@ public:
 
 		int PIDLoopIdx = 0;
 		int timeoutMs = 0;
-		double rampTime = 0.5;
+		double rampTime = 0.01;//0.5 to 0.1 2/15/18 CS
 		armTarget = -5000;
 		leftTarget = 0;
 		rightTarget = 0;
 
-		// Open/Closed Loop Ramp forces the robot to take a certain amount of time to reach the speed
-		// it is told. It takes (rampTime) # of seconds to reach the full speed it's told. This avoids
-		// having the robot have enormous changes in speed so that parts don't jerk around on the bot.
+		bot->ConfigureOpenRampTime(rampTime);
+		bot->ConfigureClosedRampTime(rampTime);
 
-		// OpenloopRamp is used when the robot is being controlled directly, whereas ClosedloopRamp is
-		// used when the motors are in a control loop, such as PID control. For now, they both use the
-		// same ramp time.
-		leftFront->ConfigOpenloopRamp(rampTime, timeoutMs);
-		rightFront->ConfigOpenloopRamp(rampTime, timeoutMs);
-		leftRear->ConfigOpenloopRamp(rampTime, timeoutMs);
-		rightRear->ConfigOpenloopRamp(rampTime, timeoutMs);
-		arm->ConfigOpenloopRamp(rampTime, timeoutMs);
-
-		leftFront->ConfigClosedloopRamp(rampTime, timeoutMs);
-		rightFront->ConfigClosedloopRamp(rampTime, timeoutMs);
-		leftRear->ConfigClosedloopRamp(rampTime, timeoutMs);
-		rightRear->ConfigClosedloopRamp(rampTime, timeoutMs);
-		arm->ConfigClosedloopRamp(rampTime, timeoutMs);
-
-		// Configuration setup for the sensor on the arm, PIDLoopIdx is the default PID control loop.
-		// SensorPhase dictates which the direction of positive or negative movement for the encoder
-		// The Forward/Reverse soft limits try to force the motor to keep the encoder within the range
-		// of values specified
-		arm->ConfigSelectedFeedbackSensor(QuadEncoder, PIDLoopIdx, timeoutMs);
-		arm->SetSensorPhase(true);
-		arm->ConfigForwardSoftLimitThreshold(-135000, timeoutMs);
-		arm->ConfigReverseSoftLimitThreshold(10000, timeoutMs);
-		arm->ConfigForwardSoftLimitEnable(false, timeoutMs);
-		arm->ConfigReverseSoftLimitEnable(false, timeoutMs);
-		arm->SetSelectedSensorPosition(0, 0, timeoutMs);
-
-		// NominalOutput is the default output when the PID loop isn't influencing the motor output, we
-		// want the motor to remain still if it has reached its target, so the nominal output is 0.
-		// Peak Output is the maximum output that the motor can have during PID Control (in percent)
-		arm->ConfigNominalOutputForward(0, timeoutMs);
-		arm->ConfigNominalOutputReverse(0, timeoutMs);
-		arm->ConfigPeakOutputForward(1, timeoutMs);
-		arm->ConfigPeakOutputReverse(-1, timeoutMs);
-
-		//Setup for the PID constants for the arm, these are found through trial and error
-		arm->Config_kF(PIDLoopIdx, 0.0, timeoutMs);
-		arm->Config_kP(PIDLoopIdx, 0.05, timeoutMs);
-		arm->Config_kI(PIDLoopIdx, 0.000001, timeoutMs);
-		arm->Config_kD(PIDLoopIdx, 20.0, timeoutMs);
-
-		// These commands setup the encoders for the left and right motors, functions very similarly to
-		// the arm's encoder setup
-		leftFront->ConfigSelectedFeedbackSensor(QuadEncoder, PIDLoopIdx, timeoutMs);
-		rightFront->ConfigSelectedFeedbackSensor(QuadEncoder, PIDLoopIdx, timeoutMs);
-		leftFront->SetSensorPhase(false);
-		rightFront->SetSensorPhase(false);
-		leftFront->SetSelectedSensorPosition(0, PIDLoopIdx, timeoutMs);
-		rightFront->SetSelectedSensorPosition(0, PIDLoopIdx, timeoutMs);
-
-		leftFront->ConfigNominalOutputForward(0, timeoutMs);
-		leftFront->ConfigNominalOutputReverse(0, timeoutMs);
-		leftFront->ConfigPeakOutputForward(1, timeoutMs);
-		leftFront->ConfigPeakOutputReverse(-1, timeoutMs);
-		rightFront->ConfigNominalOutputForward(0, timeoutMs);
-		rightFront->ConfigNominalOutputReverse(0, timeoutMs);
-		rightFront->ConfigPeakOutputForward(1, timeoutMs);
-		rightFront->ConfigPeakOutputReverse(-1, timeoutMs);
-
-		leftFront->Config_kF(PIDLoopIdx, 0.0, timeoutMs);
-		leftFront->Config_kP(PIDLoopIdx, 1.0, timeoutMs);
-		leftFront->Config_kI(PIDLoopIdx, 0.0, timeoutMs);
-		leftFront->Config_kD(PIDLoopIdx, 0.0, timeoutMs);
-
-		rightFront->Config_kF(PIDLoopIdx, 0.0, timeoutMs);
-		rightFront->Config_kP(PIDLoopIdx, 1.0, timeoutMs);
-		rightFront->Config_kI(PIDLoopIdx, 0.0, timeoutMs);
-		rightFront->Config_kD(PIDLoopIdx, 0.0, timeoutMs);
+		bot->ConfigureLeftPID(0.0, 0.0, 0.0, 0.0);
+		bot->ConfigureRightPID(0.0, 0.0, 0.0, 0.0);
+		bot->ConfigureArmPID(0.0, 8.0, 0.001, 1200.0);
 
 		//Initialization of variables, their use is explained later on
 		auton = false;
@@ -267,76 +230,15 @@ public:
 
 
 	void TeleopPeriodic() override {
-		/* This function is the main loop when the TeleOperator mode is enabled.
-		 *
-		 * Encapsulating the entire function is a functionality based on the variable "killed"
-		 * If "killed" is set to true, the robot will not turn on any motors until TeleOp is
-		 * re-enabled through the driver station.
-		 *
-		 * There are three main modes throughout this loop: default, auton, and PIDControl
-		 *
-		 * default:
-		 *
-		 * When TeleOp is enabled, this mode is first engaged. This gives direct control of the bot
-		 * to the driver. Left/Right on the joystick rotates the robot, while Forward/Reverse on the bot
-		 * controls the throttle. The twisting of the joystick (Yaw) controls the position of the arm.
-		 * Whenever another mode is disabled, the robot reverts to giving the driver control in this mode.
-		 *
-		 * Auton:
-		 *
-		 * This mode is toggled by pressing the trigger on the Saitek-X55 Joystick. In this mode,
-		 * the robot will use the inputs that it receives from the NetworkTable(an interface used
-		 * to communicate with an external processor) to try to track and follow an object within
-		 * view of the camera.
-		 *
-		 * PIDControl:
-		 *
-		 * This mode is toggled by pressing the thumb button on the joystick.
-		 * This mode enables PIDControl for all the motors on the bot. The driver has the same control
-		 * scheme as in the default control mode, but this time the driver is actually changing the targets
-		 * for the robot's position, rather than the PercentOutput of the motors. This means that the robot
-		 * is trying to use PID control to drive to a specified location from the driver. This mode of PID
-		 * control is only used on the drive motors, not for the arm. The arm uses PID control to move
-		 * to a pre-defined location in the code. This target location can be edited through another toggle,
-		 * the large red-button on the top of the joystick. Toggling this button allows the driver to use
-		 * the yaw of the joystick to move the target of the arm's position. Then, the bot will use PID
-		 * control to reach that specified target.
-		 *
-		 * Throughout any of these modes, using your pinkie, the driver can pull the large gray switch
-		 * on the back of the joystick to kill all motors should the robot go out of control. The only
-		 * way to get out of this killed mode is to disable and then re-enable TeleOp mode through the
-		 * driver station.
-		 *
-		 * One feature to keep in mind is that the toggles prioritize auton mode. That is, if auton mode
-		 * is enabled, and then PIDControl mode is enabled, the robot will remain in auton mode. In addition,
-		 * if both auton and PIDControl mode are enabled, and then the driver disables auton mode, the bot
-		 * will enter PIDControl mode, rather than revert to default. In summary, the modes have a priority
-		 * (from high to low) of [Auton, PIDControl, default]. This program DOES NOT reset any of the modes
-		 * until it is disabled, so keep this in mind while driving.
-		 *
-		 * P.S.
-		 * Occasionally, the encoder on the arm becomes out of sync with the programming. This means that
-		 * it's position needs to be reset using a known location for the sensor value. To perform this
-		 * calibration, move the arm so that it is touching the protective covering next to the speed
-		 * controllers. Then, press the red button on the shaft of the joystick (behind the large gray switch,
-		 * accessible with the pinkie) to set the encoder position. After doing this, the arm PID control
-		 * will function correctly.
-		 *
-		 */
-
-		// These following commands output the position, velocity, and target values for all the motors
-		// connected to the robot.
 
 		SmartDashboard::PutNumber("Arm Position", arm->GetSelectedSensorPosition(0));
 		SmartDashboard::PutNumber("Arm Velocity", arm->GetSelectedSensorVelocity(0));
-		SmartDashboard::PutNumber("Arm Target", control->armTarget);
+		SmartDashboard::PutNumber("Arm Target", bot->GetArmTarget() + control->GetAxisArmChange());
 
-		SmartDashboard::PutNumber("Left Position", leftFront->GetSelectedSensorPosition(0));
-		SmartDashboard::PutNumber("Left Velocity", leftFront->GetSelectedSensorVelocity(0));
-		SmartDashboard::PutNumber("Right Position", rightFront->GetSelectedSensorPosition(0));
-		SmartDashboard::PutNumber("Right Velocity", rightFront->GetSelectedSensorVelocity(0));
-		SmartDashboard::PutNumber("Left Target", leftTarget);
-		SmartDashboard::PutNumber("Right Target", rightTarget);
+		SmartDashboard::PutNumber("Left Position", leftRear->GetSelectedSensorPosition(0));
+		SmartDashboard::PutNumber("Left Velocity", leftRear->GetSelectedSensorVelocity(0));
+		SmartDashboard::PutNumber("Right Position", rightRear->GetSelectedSensorPosition(0));
+		SmartDashboard::PutNumber("Right Velocity", rightRear->GetSelectedSensorVelocity(0));
 
 		SmartDashboard::PutNumber("Voltage", power->GetVoltage());
 		SmartDashboard::PutNumber("Current", power->GetTotalCurrent());
@@ -345,6 +247,14 @@ public:
 		SmartDashboard::PutNumber("Energy", power->GetTotalEnergy());
 
 		SmartDashboard::PutNumber("STAGE", 1);
+
+		SmartDashboard::PutBoolean("Compressor Enabled", compressor->Enabled());
+		SmartDashboard::PutBoolean("Pressure Switch Enabled", compressor->GetPressureSwitchValue());
+		SmartDashboard::PutBoolean("Compressor High Current Fault", compressor->GetCompressorCurrentTooHighFault());
+		SmartDashboard::PutBoolean("Compressor Not Connected", compressor->GetCompressorNotConnectedFault());
+		SmartDashboard::PutBoolean("Compressor Shorted Fault", compressor->GetCompressorShortedFault());
+		SmartDashboard::PutBoolean("Closed Loop Control", compressor->GetClosedLoopControl());
+		SmartDashboard::PutNumber("Compressor Current", compressor->GetCompressorCurrent());
 
 		//SmartDashboard::PutNumber("Joystick 2", control->joy1->GetX());
 		if(!killed){
@@ -430,91 +340,16 @@ public:
 					armTarget += joyZ*2500;
 				}
 			} else {
-				SmartDashboard::PutNumber("STAGE", 4);
-				control->Drive();
-				SmartDashboard::PutNumber("STAGE", 5);
-				control->MoveArm();
-				SmartDashboard::PutNumber("STAGE", 6);
+				bot->DirectDrive();
+				bot->PIDMoveArm();
+				bot->PIDSetPositions();
+				bot->DirectControlClaw();
 
-				if(control->GetButtonLower()){
-					control->armTarget = -10000;
-				}
-				if(control->GetButtonRaise()){
-					control->armTarget = -100000;
-				}
-				SmartDashboard::PutNumber("STAGE", 7);
+				control->ToggleMode();
+				bot->SetMode();
 
-				//Claw Motors
-				if(control->GetButtonClawSuck()){
-					leftClaw->Set(ControlMode::PercentOutput, 0.5);
-					rightClaw->Set(ControlMode::PercentOutput, 0.5);
-				} else if(control->GetButtonClawSpit()){
-					leftClaw->Set(ControlMode::PercentOutput, -1.0);
-					rightClaw->Set(ControlMode::PercentOutput, -1.0);
-				} else {
-					leftClaw->Set(ControlMode::PercentOutput, 0.1);
-					rightClaw->Set(ControlMode::PercentOutput, 0.1);
-				}
-				SmartDashboard::PutNumber("STAGE", 8);
-
-				if(!limitSwitch->Get()){
-					leftFront->Set(ControlMode::PercentOutput, 0.1);
-					rightFront->Set(ControlMode::PercentOutput, 0.1);
-				}
-				SmartDashboard::PutNumber("STAGE", 9);
-
-				//Claw Pneumatics
-				if(control->GetButtonClawToggle()){
-					clawEnabled = !clawEnabled;
-				}
-				SmartDashboard::PutNumber("STAGE", 10);
-				if(control->GetButtonClawWristToggle()){
-					clawWristEnabled = !clawWristEnabled;
-				}
-				SmartDashboard::PutNumber("STAGE", 11);
-
-				if(clawEnabled){
-					claw.Set(frc::DoubleSolenoid::Value::kReverse);
-				} else {
-					claw.Set(frc::DoubleSolenoid::Value::kForward);
-				}
-				SmartDashboard::PutNumber("STAGE", 12);
-
-				if(clawWristEnabled){
-					clawWrist.Set(frc::DoubleSolenoid::Value::kReverse);
-				} else {
-					clawWrist.Set(frc::DoubleSolenoid::Value::kForward);
-				}
-				SmartDashboard::PutNumber("STAGE", 13);
 
 			}
-
-			if(control->GetButtonAuton()){
-				auton = !auton;
-				counter = 0;
-			}
-			SmartDashboard::PutNumber("STAGE", 14);
-			if(control->GetButtonPID()){
-				PIDControl = !PIDControl;
-				leftFront->SetSelectedSensorPosition(0, 0, 10);
-				rightFront->SetSelectedSensorPosition(0, 0, 10);
-				leftTarget = 0;
-				rightTarget = 0;
-			}
-			SmartDashboard::PutNumber("STAGE", 15);
-			if(control->GetButtonArmCalibrate()){
-
-			}
-			SmartDashboard::PutNumber("STAGE", 16);
-
-			//KILL SWITCH
-			if(control->GetButtonKill()){
-				killed = true;
-				leftFront->Set(ControlMode::PercentOutput, 0.0);
-				rightFront->Set(ControlMode::PercentOutput, 0.0);
-				arm->Set(ControlMode::PercentOutput, 0.0);
-			}
-			SmartDashboard::PutNumber("STAGE", 17);
 		}
 
 	}

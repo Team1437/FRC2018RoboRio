@@ -17,6 +17,9 @@
 #define TANK_PS4 3
 #define DUAL_JOYSTICK 4
 #define JOYSTICK_THROTTLE 5
+#define ARCADE_LOGITECH 6
+#define TANK_LOGITECH 7
+#define DUAL_DRIVER_LOGITECH_THROTTLE 8
 
 class InputControl {
 private:
@@ -33,6 +36,8 @@ private:
 	double armMult = 1.0;
 
 	int mode;
+
+	double throttleSetPoint = 0.0;
 
 public:
 	Joystick * joy1 = new Joystick(0);
@@ -55,6 +60,8 @@ public:
 	void SetDriveMultipliers(double, double, double, double);
 	void SetArmMultiplier(double);
 
+	void SetThrottleSetPoint();
+
 	double GetRawAxisLeftThrottle();
 	double GetRawAxisRightThrottle();
 	double GetRawAxisLeftTurn();
@@ -65,19 +72,24 @@ public:
 	double GetAxisRightThrottle();
 	double GetAxisLeftTurn();
 	double GetAxisRightTurn();
-	double GetAxisArm();
+	int GetAxisArmChange();
 
 	bool GetButtonClawToggle();
+	bool GetButtonClawTogglePressed();
 	bool GetButtonClawWristToggle();
 	bool GetButtonClawSuck();
-	bool GetButtonClawSpit();
+	bool GetButtonClawSpitFast();
+	bool GetButtonClawSpitSlow();
 	bool GetButtonKill();
 	bool GetButtonArmCalibrate();
 	bool GetButtonAuton();
 	bool GetButtonPID();
 
-	bool GetButtonLower();
-	bool GetButtonRaise();
+	void ToggleMode();
+
+	bool GetButtonArmLow();
+	bool GetButtonArmMid();
+	bool GetButtonArmHigh();
 
 	int GetMode();
 
