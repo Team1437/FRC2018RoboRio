@@ -20,6 +20,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <stdio.h>
+#include <DriverStation.h>
 
 #include <PowerDistributionPanel.h>
 
@@ -32,16 +33,21 @@
 
 #include <InputControl.h>
 #include <RobotLogic.h>
+#include <AutonScripts/AutonScripts.h>
 
-#define ARCADE_JOYSTICK 0
-#define ARCADE_PS4 1
+#define LEFT 0
+#define CENTER 1
+#define RIGHT 2
+#define FORWARD 3
 
 class Robot : public frc::IterativeRobot {
 private:
 	//Unused initial variables
 	//frc::Joystick m_stick{0};
 	frc::LiveWindow& m_lw = *frc::LiveWindow::GetInstance();
-	//frc::Timer m_timer;
+	frc::Timer timer;
+
+	std::string gameData;
 
 	frc::PowerDistributionPanel * power = new PowerDistributionPanel(0);
 
@@ -50,22 +56,26 @@ private:
 	std::shared_ptr<nt::NetworkTable> table;
 
 	//Variable declaration for all the motors
-	TalonSRX * leftRear;
-	TalonSRX * rightRear;
-	VictorSPX * leftFront;
-	VictorSPX * rightFront;
+	TalonSRX * leftMaster;
+	TalonSRX * rightMaster;
+	VictorSPX * leftFollower;
+	VictorSPX * rightFollower;
 	TalonSRX * arm;
-	VictorSPX * leftClaw;
+	TalonSRX * leftClaw;
 	TalonSRX * rightClaw;
+
+	PigeonIMU * pigeon;
 
 	Compressor * compressor;
 
-	frc::DoubleSolenoid claw {0, 1};
-	frc::DoubleSolenoid clawWrist {2, 3};
+	frc::DoubleSolenoid claw {CLAW_PCM_ID_1, CLAW_PCM_ID_2};
+	frc::DoubleSolenoid clawWrist {CLAW_WRIST_PCM_ID_1, CLAW_WRIST_PCM_ID_2};
 
 	//Declaration for the joystick and a button that is connected to a DigitalInput port on the RoboRIO
 	Joystick * joy;
-	frc::DigitalInput * limitSwitch;
+	frc::DigitalInput * pinRed;
+	frc::DigitalInput * pinNothing;
+	int position;
 
 	//Variable declaration for variables that are used while the robot is running
 	bool auton;
@@ -78,64 +88,72 @@ private:
 	bool editTarget;
 	bool PIDControl;
 
-	int armTarget;
-	int leftTarget;
-	int rightTarget;
-
-	bool clawEnabled;
-	bool clawWristEnabled;
-
 	bool killed;
 
 	InputControl * control;
 	RobotLogic * bot;
+
+	AutonScript * script;
+
+	//int trajectories;
+	//int numPoints_1;
+	//Waypoint * points_1;
+	//int numPoints_2;
+	//Waypoint * points_2;
+
+	//bool stage0;
+	//bool stage1;
+	//bool stage2;
 public:
 	//This function runs every time the robot first turns on, will not run again until it is turned off and back on again
 	Robot() {
 
 		//Initialize the motors with their respective ID's on the CAN bus
-		leftFront = new VictorSPX(3);
-		rightFront = new VictorSPX(7);
-		leftRear = new TalonSRX(4);
-		rightRear = new TalonSRX(8);
-		arm = new TalonSRX(6);
-		leftClaw = new VictorSPX(5);
-		rightClaw = new TalonSRX(2);
+		leftFollower = new VictorSPX(LEFT_FOLLOW_ID);
+		rightFollower = new VictorSPX(RIGHT_FOLLOW_ID);
+		leftMaster = new TalonSRX(LEFT_MASTER_ID);
+		rightMaster = new TalonSRX(RIGHT_MASTER_ID);
+		arm = new TalonSRX(ARM_ID);
+		leftClaw = new TalonSRX(LEFT_CLAW_ID);
+		rightClaw = new TalonSRX(RIGHT_CLAW_ID);
+
+		pigeon = new PigeonIMU(0);
+		pigeon->SetFusedHeading(0, 10);
 
 		compressor = new Compressor(0);
 		compressor->SetClosedLoopControl(true);
 
-		control = new InputControl(ARCADE_LOGITECH);
-		//control->SetLeftMotor(leftFront);
-		//control->SetRightMotor(rightFront);
-		//control->SetArmMotor(arm);
-		//control->SetLeftClawMotor(leftClaw);
-		//control->SetRightClawMotor(rightClaw);
+		control = new InputControl(FINAL_CONTROL_SINGLE_ARCADE);
 		control->SetDriveMultipliers(1.0, 1.0, 0.5, 0.5);
-		control->SetArmMultiplier(6.0);
+		control->SetArmMultiplier(PID_ARM_MULTIPLIER);
 
 		bot = new RobotLogic(control);
-		bot->SetLeftMasterMotor(leftRear);
-		bot->SetLeftFollowerMotor(leftFront);
-		bot->SetRightMasterMotor(rightRear);
-		bot->SetRightFollowerMotor(rightFront);
+		bot->SetLeftMasterMotor(leftMaster);
+		bot->SetLeftFollowerMotor(leftFollower);
+		bot->SetRightMasterMotor(rightMaster);
+		bot->SetRightFollowerMotor(rightFollower);
 		bot->SetArmMotor(arm);
 		bot->SetLeftClawMotor(leftClaw);
 		bot->SetRightClawMotor(rightClaw);
 		bot->SetClaw(&claw);
 		bot->SetClawWrist(&clawWrist);
+		bot->SetPigeon(pigeon);
+		position = FORWARD;
 
 		bot->InitializeMotors();
 
+		bot->SetBotParameters(0.020, 6.0, 5.0, 10.0, 0.65405, 0.478778720);
 
+		script = NULL;
 
 		joy = control->joy1;
 
 		//Start the camera stream with a resolution of 640x480
-		cam = CameraServer::GetInstance()->StartAutomaticCapture();
+		////cam = CameraServer::GetInstance()->StartAutomaticCapture();
 		cam.SetResolution(640, 480);
 		//CameraServer::GetInstance()->PutVideo("Rectangle", 640, 480);
-		limitSwitch = new frc::DigitalInput(0);
+		pinRed = new frc::DigitalInput(9);
+		pinNothing = new frc::DigitalInput(8);
 
 		//Motor configuration:
 		// -- Make sure the motors all turn the right directions'
@@ -177,12 +195,14 @@ public:
 		killed = false;
 		PIDControl = false;
 		editTarget = false;
-		armTarget = 0;
-		leftTarget = 0;
-		rightTarget = 0;
 
-		clawEnabled = false;
-		clawWristEnabled = false;
+		double rampTime = 0.01;//0.5 to 0.1 2/15/18 CS
+		bot->ConfigureOpenRampTime(rampTime);
+		bot->ConfigureClosedRampTime(rampTime);
+
+		bot->ConfigureLeftPID(0.0, 0.0, 0.0, 0.0);
+		bot->ConfigureRightPID(0.0, 0.0, 0.0, 0.0);
+		bot->ConfigureArmPID(0.0, ARM_P, ARM_I, ARM_D);
 
 
 
@@ -192,53 +212,74 @@ public:
 	}
 
 	void AutonomousInit() override {
+		gameData = frc::DriverStation::GetInstance().GetGameSpecificMessage();
+		bot->pigeonReference = 0;
+		pigeon->SetFusedHeading(0, 10);
+
+		if(!pinRed->Get()){
+			if(!pinNothing->Get()){
+				position = FORWARD;
+			} else {
+				position = CENTER;
+			}
+		} else {
+			if(!pinNothing->Get()){
+				position = RIGHT;
+			} else {
+				position = LEFT;
+			}
+		}
+		SmartDashboard::PutNumber("POSITION", position);
+		SmartDashboard::PutString("Game Data", gameData);
+
+		if(position == LEFT){
+			if(gameData.length() > 0){
+				if(gameData[0] == 'L'){
+					script = new LeftSwitch(bot);
+				} else if(gameData[1] == 'L'){
+					script = new LeftScale(bot);
+				} else {
+					script = new LeftHookSwitch(bot);
+				}
+			}
+			//script = new LeftScale(bot);
+		} else if (position == CENTER){
+			if(gameData[0] == 'L'){
+				script = new CenterSwitchLeft(bot);
+			} else {
+				script = new CenterSwitchRight(bot);
+			}
+		} else if (position == RIGHT){
+			if(gameData.length() > 0){
+				if(gameData[0] == 'R'){
+					script = new RightSwitch(bot);
+				} else if(gameData[1] == 'R'){
+					script = new RightScale(bot);
+				} else {
+					script = new RightHookSwitch(bot);
+				}
+			}
+		} else {
+
+		}
+		//script = new LeftSwitch(bot);
+
+
+		bot->AutonInitEncoders();
+		bot->ClawClose();
+		bot->ClawWristRetract();
+		bot->ClawNeutralSuck();
 	}
 
 	void AutonomousPeriodic() override {
-	}
-
-	//This function is run every time the TeleOperator mode is enabled from the driver station
-	//It will not run again until the TeleOperator mode is re-enabled
-	void TeleopInit() override {
-		//Initialization of variables to make sure everything is setup properly whenever TeleOp is re-enabled
-		killed = false;
-
-		int PIDLoopIdx = 0;
-		int timeoutMs = 0;
-		double rampTime = 0.01;//0.5 to 0.1 2/15/18 CS
-		armTarget = -5000;
-		leftTarget = 0;
-		rightTarget = 0;
-
-		bot->ConfigureOpenRampTime(rampTime);
-		bot->ConfigureClosedRampTime(rampTime);
-
-		bot->ConfigureLeftPID(0.0, 0.0, 0.0, 0.0);
-		bot->ConfigureRightPID(0.0, 0.0, 0.0, 0.0);
-		bot->ConfigureArmPID(0.0, 8.0, 0.001, 1200.0);
-
-		//Initialization of variables, their use is explained later on
-		auton = false;
-		PIDControl = false;
-		counter = 0;
-		editTarget = false;
-		clawEnabled = false;
-		clawWristEnabled = false;
-
-		control->armTarget = 0;
-	}
-
-
-	void TeleopPeriodic() override {
-
 		SmartDashboard::PutNumber("Arm Position", arm->GetSelectedSensorPosition(0));
 		SmartDashboard::PutNumber("Arm Velocity", arm->GetSelectedSensorVelocity(0));
 		SmartDashboard::PutNumber("Arm Target", bot->GetArmTarget() + control->GetAxisArmChange());
 
-		SmartDashboard::PutNumber("Left Position", leftRear->GetSelectedSensorPosition(0));
-		SmartDashboard::PutNumber("Left Velocity", leftRear->GetSelectedSensorVelocity(0));
-		SmartDashboard::PutNumber("Right Position", rightRear->GetSelectedSensorPosition(0));
-		SmartDashboard::PutNumber("Right Velocity", rightRear->GetSelectedSensorVelocity(0));
+		SmartDashboard::PutNumber("Left Position", leftMaster->GetSelectedSensorPosition(0));
+		SmartDashboard::PutNumber("Left Velocity", leftMaster->GetSelectedSensorVelocity(0));
+		SmartDashboard::PutNumber("Right Position", rightMaster->GetSelectedSensorPosition(0));
+		SmartDashboard::PutNumber("Right Velocity", rightMaster->GetSelectedSensorVelocity(0));
 
 		SmartDashboard::PutNumber("Voltage", power->GetVoltage());
 		SmartDashboard::PutNumber("Current", power->GetTotalCurrent());
@@ -256,98 +297,85 @@ public:
 		SmartDashboard::PutBoolean("Closed Loop Control", compressor->GetClosedLoopControl());
 		SmartDashboard::PutNumber("Compressor Current", compressor->GetCompressorCurrent());
 
-		//SmartDashboard::PutNumber("Joystick 2", control->joy1->GetX());
+		SmartDashboard::PutNumber("Heading", pigeon->GetFusedHeading());
+		SmartDashboard::PutNumber("Target Heading", bot->targetBearing);
+		SmartDashboard::PutNumber("Angle Difference", bot->angleDifference);
+		SmartDashboard::PutNumber("Pigeon Reference", bot->pigeonReference);
+
+		SmartDashboard::PutNumber("LEFT OUTPUT", bot->leftOutput);
+		SmartDashboard::PutNumber("RIGHT OUTPUT", bot->rightOutput);
+
+		SmartDashboard::PutNumber("Left Encoder Error", bot->leftEncoder->last_error);
+		SmartDashboard::PutNumber("Left Encoder Segment", bot->rightEncoder->last_error);
+		SmartDashboard::PutNumber("Left Encoder Finished", bot->leftEncoder->finished);
+		SmartDashboard::PutNumber("Timer", timer.Get());
+
+		//SmartDashboard::PutNumber("Trajectory Length", bot->trajectoryLength[0]);
+		//SmartDashboard::PutNumber("Trajectory Length 2", bot->trajectoryLength[1]);
+
+		script->RunScript();
+		script->CheckFlags();
+
+	}
+
+	void TeleopInit() override {
+		killed = false;
+
+		//control->armTarget = 0;
+		//bot->ClawClose();
+		//bot->ClawWristRetract();
+	}
+
+
+	void TeleopPeriodic() override {
+
+		SmartDashboard::PutNumber("Arm Position", arm->GetSelectedSensorPosition(0));
+		SmartDashboard::PutNumber("Arm Velocity", arm->GetSelectedSensorVelocity(0));
+		SmartDashboard::PutNumber("Arm Target", arm->GetClosedLoopTarget(0));
+
+		SmartDashboard::PutNumber("Left Position", leftMaster->GetSelectedSensorPosition(0));
+		SmartDashboard::PutNumber("Left Velocity", leftMaster->GetSelectedSensorVelocity(0));
+		SmartDashboard::PutNumber("Right Position", rightMaster->GetSelectedSensorPosition(0));
+		SmartDashboard::PutNumber("Right Velocity", rightMaster->GetSelectedSensorVelocity(0));
+
+		SmartDashboard::PutNumber("Voltage", power->GetVoltage());
+		SmartDashboard::PutNumber("Current", power->GetTotalCurrent());
+		SmartDashboard::PutNumber("Temperature", power->GetTemperature());
+		SmartDashboard::PutNumber("Power", power->GetTotalPower());
+		SmartDashboard::PutNumber("Energy", power->GetTotalEnergy());
+
+		SmartDashboard::PutNumber("STAGE", 1);
+
+		SmartDashboard::PutBoolean("Compressor Enabled", compressor->Enabled());
+		SmartDashboard::PutBoolean("Pressure Switch Enabled", compressor->GetPressureSwitchValue());
+		SmartDashboard::PutBoolean("Compressor High Current Fault", compressor->GetCompressorCurrentTooHighFault());
+		SmartDashboard::PutBoolean("Compressor Not Connected", compressor->GetCompressorNotConnectedFault());
+		SmartDashboard::PutBoolean("Compressor Shorted Fault", compressor->GetCompressorShortedFault());
+		SmartDashboard::PutBoolean("Closed Loop Control", compressor->GetClosedLoopControl());
+		SmartDashboard::PutNumber("Compressor Current", compressor->GetCompressorCurrent());
+		SmartDashboard::PutNumber("ARM OUTPUT", arm->GetMotorOutputPercent());
+
+		SmartDashboard::PutNumber("Heading", pigeon->GetFusedHeading());
+
+
+
+
+		//SmartDashboard::PutNumber("LEFT OUTPUT", 0);
+		//SmartDashboard::PutNumber("RIGHT OUTPUT", 0);
 		if(!killed){
 			SmartDashboard::PutNumber("STAGE", 2);
 			if (auton){
 				// This command gets the information about the targeted object from the
 				// NetworkTable, and stores it in the variable "contour"
 				contour = table.get()->GetNumberArray("Contour", llvm::ArrayRef<double>());
-				if(contour.size() > 0){
-					double x = contour[0];
-					double y = contour[1];
-					double w = contour[2];
-					double h = contour[3];
-					double area = contour[4];
-					std::cout << x;
-
-					/* These lines of code process two control variables: "rectCenterX" and "error"
-					 *
-					 * "rectCenterX" is a variable between -1.0 and 1.0, representing the object's
-					 * positioning within the screen. -1.0 is on the very left of the screen, 1.0
-					 * on the very right, with 0.0 being exactly in the middle. This variable is
-					 * used to dictate the turning of the robot to follow the target. It is scaled
-					 * by a factor of 2.0 (in the line "rectCenterX /= 2.0") to be in the appropriate
-					 * range to control the motors.
-					 *
-					 * "error" is an approximate of the target's distance from the robot. It's scale
-					 * is not exactly precise, and is scaled quite a bit to be in the appropriate
-					 * range for the robot. In the end, the robot targets 0.5 meters (approximate) when
-					 * trying to follow a green/yellow vex ball.
-					 *
-					 */
-					double rectCenterX = (x + w/2.0 - imgWidth/2.0)/(imgWidth/2.0);
-					rectCenterX /= 2.0;
-					double a = 16821.5;
-					double dist = a/sqrt(w*h);
-					double error = (dist -150)/50;
-					error /= -25.0;
-					// The motors outputs are dictated by "error" and "rectCenterX"
-					leftFront->Set(ControlMode::PercentOutput, error - rectCenterX);
-					rightFront->Set(ControlMode::PercentOutput, error + rectCenterX);
-
-					/* The following if/else statement tries to detect when the robot has been sitting still
-					 * for a short amount of time. It decides when this condition is true by
-					 *
-					 */
-
-					if( pow(x - previous[0], 2) + pow((y - previous[1]), 2) < pow(5, 2) && pow(w*h - previous[2] * previous[3], 2) < pow(10, 2)){
-						if (counter >= 3){
-							leftFront->Set(ControlMode::PercentOutput, 0.3);
-							rightFront->Set(ControlMode::PercentOutput, 0.3);
-						}
-						counter++;
-					} else {
-						counter = 0;
-					}
-					previous[0] = x;
-					previous[1] = y;
-					previous[2] = w;
-					previous[3] = h;
-				} else {
-					leftFront->Set(ControlMode::PercentOutput, 0);
-					rightFront->Set(ControlMode::PercentOutput, 0);
-				}
-			} else if(PIDControl){
-				SmartDashboard::PutNumber("STAGE", 3);
-				double joyX = joy->GetX();
-				double joyY = joy->GetY();
-				double joyZ = joy->GetZ();
-				double throttleScale = 50.0;
-				double turnScale = 20.0;
-
-				leftFront->Set(ControlMode::Position, leftTarget);
-				rightFront->Set(ControlMode::Position, rightTarget);
-				arm->Set(ControlMode::Position, armTarget);
-
-				leftTarget += joyY*throttleScale - joyX*turnScale;
-				rightTarget += joyY*throttleScale + joyX*turnScale;
-
-				if(joy->GetRawButtonPressed(2)){
-					editTarget = !editTarget;
-				}
-				if(editTarget){
-					armTarget += joyZ*2500;
-				}
 			} else {
 				bot->DirectDrive();
 				bot->PIDMoveArm();
 				bot->PIDSetPositions();
 				bot->DirectControlClaw();
 
-				control->ToggleMode();
-				bot->SetMode();
-
+				//control->ToggleMode();
+				//bot->SetMode();
 
 			}
 		}

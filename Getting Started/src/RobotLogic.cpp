@@ -5,7 +5,14 @@
  *      Author: PatriotRobotics
  */
 
+
+
 #include <RobotLogic.h>
+#include <pathfinder.h>
+#include <cmath>
+
+#include <SmartDashboard/SmartDashboard.h>
+#include <SmartDashboard/SendableChooser.h>
 
 RobotLogic::RobotLogic(InputControl * control){
 	this->control = control;
@@ -26,7 +33,7 @@ void RobotLogic::SetRightFollowerMotor(VictorSPX * rightFollower){
 void RobotLogic::SetArmMotor(TalonSRX * arm){
 	this->arm = arm;
 }
-void RobotLogic::SetLeftClawMotor(VictorSPX * leftClaw){
+void RobotLogic::SetLeftClawMotor(TalonSRX * leftClaw){
 	this->leftClaw = leftClaw;
 }
 void RobotLogic::SetRightClawMotor(TalonSRX * rightClaw){
@@ -37,6 +44,9 @@ void RobotLogic::SetClaw(frc::DoubleSolenoid * claw){
 }
 void RobotLogic::SetClawWrist(frc::DoubleSolenoid * clawWrist){
 	this->clawWrist = clawWrist;
+}
+void RobotLogic::SetPigeon(PigeonIMU * pigeon){
+	this->pigeon = pigeon;
 }
 
 int RobotLogic::GetArmTarget(){
@@ -53,9 +63,13 @@ void RobotLogic::InitializeMotors(){
 	leftFollower->EnableVoltageCompensation(true);
 	rightFollower->EnableVoltageCompensation(true);
 	arm->EnableVoltageCompensation(true);
-	leftMaster->SetInverted(true);
-	leftFollower->SetInverted(true);
-	leftClaw->SetInverted(true);
+	leftMaster->SetInverted(LEFT_INVERTED);
+	leftFollower->SetInverted(LEFT_INVERTED);
+	leftClaw->SetInverted(LEFT_CLAW_INVERTED);
+	rightMaster->SetInverted(RIGHT_INVERTED);
+	rightFollower->SetInverted(RIGHT_INVERTED);
+	rightClaw->SetInverted(RIGHT_CLAW_INVERTED);
+	arm->SetInverted(ARM_INVERTED);
 }
 
 void RobotLogic::SetBotParameters(double timeStep, double maxVel, double maxAcc, double maxJer, double wheelbaseWidth, double wheelCircumference){
@@ -120,7 +134,7 @@ void RobotLogic::ConfigureRightPID(double F, double P, double I, double D){
 }
 void RobotLogic::ConfigureArmPID(double F, double P, double I, double D){
 	this->arm->ConfigSelectedFeedbackSensor(QuadEncoder, this->PIDLoopIDX, this->timeoutMS);
-	this->arm->SetSensorPhase(false);
+	this->arm->SetSensorPhase(ARM_ENCODER_PHASE);
 	this->arm->SetSelectedSensorPosition(0, this->PIDLoopIDX, this->timeoutMS);
 	this->arm->ConfigNominalOutputForward(0, this->timeoutMS);
 	this->arm->ConfigNominalOutputReverse(0, this->timeoutMS);
@@ -191,32 +205,76 @@ void RobotLogic::Kill(){
 	clawWrist->Set(frc::DoubleSolenoid::Value::kOff);
 }
 
+
+
+void RobotLogic::ClawOpen(){
+	this->claw->Set(frc::DoubleSolenoid::Value::kForward);
+	this->clawEnabled = true;
+}
+void RobotLogic::ClawClose(){
+	this->claw->Set(frc::DoubleSolenoid::Value::kReverse);
+	this->clawEnabled = false;
+}
+void RobotLogic::ClawWristExtend(){
+	this->clawWrist->Set(frc::DoubleSolenoid::Value::kForward);
+	this->clawWristEnabled = false;
+}
+void RobotLogic::ClawWristRetract(){
+	this->clawWrist->Set(frc::DoubleSolenoid::Value::kReverse);
+	this->clawWristEnabled = true;
+}
+
+void RobotLogic::ClawNeutralSuck(){
+	leftClaw->Set(ControlMode::PercentOutput, 0.1);
+	rightClaw->Set(ControlMode::PercentOutput, 0.1);
+}
+void RobotLogic::ClawSuck(){
+	leftClaw->Set(ControlMode::PercentOutput, 0.5);
+	rightClaw->Set(ControlMode::PercentOutput, 0.5);
+}
+void RobotLogic::ClawSpitSlow(){
+	leftClaw->Set(ControlMode::PercentOutput, -0.8);
+	rightClaw->Set(ControlMode::PercentOutput, -0.8);
+}
+void RobotLogic::ClawSpitFast(){
+	leftClaw->Set(ControlMode::PercentOutput, -1.0);
+	rightClaw->Set(ControlMode::PercentOutput, -1.0);
+}
+
+
+void RobotLogic::PIDSetPositionLow(){
+	this->armTarget = PID_LOW_TARGET;
+	this->control->SetThrottleSetPoint();
+}
+void RobotLogic::PIDSetPositionMid(){
+	this->armTarget = PID_MID_TARGET;
+	this->control->SetThrottleSetPoint();
+}
+void RobotLogic::PIDSetPositionHigh(){
+	this->armTarget = PID_HIGH_TARGET;
+	this->control->SetThrottleSetPoint();
+}
+
 void RobotLogic::PIDSetPositions(){
-	int low = -5;
-	int mid = -330;
-	int high = -425;
 	if(this->control->GetButtonArmLow()){
-		this->armTarget = low;
-		this->control->SetThrottleSetPoint();
+		this->PIDSetPositionLow();
 	}
 	if (this->control->GetButtonArmMid()){
-		this->armTarget = mid;
-		this->control->SetThrottleSetPoint();
+		this->PIDSetPositionMid();
 	}
 	if (this->control->GetButtonArmHigh()){
-		this->armTarget = high;
-		this->control->SetThrottleSetPoint();
+		this->PIDSetPositionHigh();
 	}
 }
 
 void RobotLogic::PIDMoveArm(){
-	if(control->GetMode() == DUAL_DRIVER_LOGITECH_THROTTLE){
+	/*if(control->GetMode() == DUAL_DRIVER_LOGITECH_THROTTLE){
 		this->PIDMoveArmThrottle();
-	} else {
-		double change = this->control->GetAxisArmChange(); // GET RAW AXIS ARM NEEDS TO BE CHANGED WHEN ROBOTLOGIC IS IMPLEMENTED
-		this->armTarget = this->armTarget + change;
-		this->arm->Set(ControlMode::Position, this->armTarget);
-	}
+	} else {*/
+	double change = this->control->GetAxisArmChange(); // GET RAW AXIS ARM NEEDS TO BE CHANGED WHEN ROBOTLOGIC IS IMPLEMENTED
+	this->armTarget = this->armTarget + change;
+	this->arm->Set(ControlMode::Position, this->armTarget);
+	//}
 }
 
 void RobotLogic::PIDMoveArmThrottle(){
@@ -229,20 +287,20 @@ void RobotLogic::DirectDrive(){
 	double rightThrottle = this->control->GetAxisRightThrottle();
 	double leftTurn = this->control->GetAxisLeftTurn();
 	double rightTurn = this->control->GetAxisRightTurn();
-	this->leftMaster->Set(ControlMode::PercentOutput, leftThrottle - leftTurn);
-	this->leftFollower->Set(ControlMode::PercentOutput, leftThrottle - leftTurn);
-	this->rightMaster->Set(ControlMode::PercentOutput, rightThrottle + rightTurn);
-	this->rightFollower->Set(ControlMode::PercentOutput, rightThrottle + rightTurn);
+	this->leftMaster->Set(ControlMode::PercentOutput, leftThrottle + leftTurn);
+	this->leftFollower->Set(ControlMode::PercentOutput, leftThrottle + leftTurn);
+	this->rightMaster->Set(ControlMode::PercentOutput, rightThrottle - rightTurn);
+	this->rightFollower->Set(ControlMode::PercentOutput, rightThrottle - rightTurn);
 }
 
 void RobotLogic::DirectMoveArm(){
-	if(this->control->GetMode() == JOYSTICK_THROTTLE){
+	/*if(this->control->GetMode() == JOYSTICK_THROTTLE){
 		int armTarget = (int) this->control->GetRawAxisArm();
 		this->arm->Set(ControlMode::Position, armTarget);
-	} else {
-		double armPower = this->control->GetRawAxisArm();
-		this->arm->Set(ControlMode::PercentOutput, armPower);
-	}
+	} else {*/
+	double armPower = this->control->GetRawAxisArm();
+	this->arm->Set(ControlMode::PercentOutput, armPower);
+	//}
 }
 
 void RobotLogic::DirectControlClaw(){
@@ -254,88 +312,202 @@ void RobotLogic::DirectControlClaw(){
 		this->clawWristEnabled = !this->clawWristEnabled;
 	}
 
-	if(this->clawEnabled){
-		this->claw->Set(frc::DoubleSolenoid::Value::kReverse);
+	if(clawEnabled){
+		this->ClawOpen();
 	} else {
-		this->claw->Set(frc::DoubleSolenoid::Value::kForward);
+		this->ClawClose();
 	}
 	if(clawWristEnabled){
-		this->clawWrist->Set(frc::DoubleSolenoid::Value::kReverse);
+		this->ClawWristRetract();
 	} else {
-		this->clawWrist->Set(frc::DoubleSolenoid::Value::kForward);
+		this->ClawWristExtend();
 	}
 
 	//Claw Motors
 	if(control->GetButtonClawSuck() || control->GetButtonClawToggle()){
-		leftClaw->Set(ControlMode::PercentOutput, 0.5);
-		rightClaw->Set(ControlMode::PercentOutput, 0.5);
+		this->ClawSuck();
 	} else if(control->GetButtonClawSpitFast()){
-		leftClaw->Set(ControlMode::PercentOutput, -1.0);
-		rightClaw->Set(ControlMode::PercentOutput, -1.0);
+		this->ClawSpitFast();
 	} else if(control->GetButtonClawSpitSlow()){
-		leftClaw->Set(ControlMode::PercentOutput, -0.8);
-		rightClaw->Set(ControlMode::PercentOutput, -0.8);
+		this->ClawSpitSlow();
 	} else{
-		leftClaw->Set(ControlMode::PercentOutput, 0.1);
-		rightClaw->Set(ControlMode::PercentOutput, 0.1);
+		this->ClawNeutralSuck();
 	}
 }
 
+double RobotLogic::Mod(double a, double modulus){
+	double result = a;
+	while(result > modulus){
+		result -= modulus;
+	}
+	while(result < 0){
+		result += modulus;
+	}
+	return result;
+}
+
+void RobotLogic::DriveOff(){
+	this->leftMaster->Set(ControlMode::PercentOutput, 0.0);
+	this->leftFollower->Set(ControlMode::PercentOutput, 0.0);
+	this->rightMaster->Set(ControlMode::PercentOutput, 0.0);
+	this->rightFollower->Set(ControlMode::PercentOutput, 0.0);
+}
+
+double RobotLogic::AngleDifference(double desired, double current){
+	double diff = (desired > current ? desired - current : current - desired);
+	double mod_diff = std::fmod(diff, 360);
+	double distance = (mod_diff < 180 ? mod_diff : 360 - mod_diff);
+
+	double sgn_diff = this->Mod(desired, 360) - this->Mod(current, 360);
+	int sign = (sgn_diff >= 0 ? 1 : -1);
+	if (sgn_diff < 180.0 && sgn_diff > -180.0){
+		sign = sign * -1;
+	}
+	return distance*sign;
+}
+
 void RobotLogic::AutonInitEncoders(){
-	//leftEncoder = malloc(sizeof(EncoderFollower));
-	//rightEncoder = malloc(sizeof(EncoderFollower));
-	leftEncoder.last_error = 0;
-	leftEncoder.segment = 0;
-	leftEncoder.finished = 0;
-	rightEncoder.last_error = 0;
-	rightEncoder.segment = 0;
-	rightEncoder.finished = 0;
+	//this->leftMaster->SetSelectedSensorPosition(0, this->PIDLoopIDX, this->timeoutMS);
+	//this->rightMaster->SetSelectedSensorPosition(0, this->PIDLoopIDX, this->timeoutMS);
+	this->leftEncoder = new EncoderFollower();
+	this->rightEncoder = new EncoderFollower();
 
-	leftEncoderConfig.initial_position = this->leftMaster->GetSelectedSensorPosition(this->PIDLoopIDX);
-	leftEncoderConfig.ticks_per_revolution = 4096;
-	leftEncoderConfig.wheel_circumference = this->wheelCircumference;
-	leftEncoderConfig.kp = 1.0;
-	leftEncoderConfig.ki = 0.0;
-	leftEncoderConfig.kp = 0.0;
-	leftEncoderConfig.kv = 1.0 / this->maxVel;
-	leftEncoderConfig.ka = 0.0;
-	rightEncoderConfig.initial_position = this->rightMaster->GetSelectedSensorPosition(this->PIDLoopIDX);
-	rightEncoderConfig.ticks_per_revolution = 4096;
-	rightEncoderConfig.wheel_circumference = this->wheelCircumference;
-	rightEncoderConfig.kp = 1.0;
-	rightEncoderConfig.ki = 0.0;
-	rightEncoderConfig.kp = 0.0;
-	rightEncoderConfig.kv = 1.0 / this->maxVel;
-	rightEncoderConfig.ka = 0.0;
+	this->leftEncoder->last_error = 0;
+	this->leftEncoder->segment = 0;
+	this->leftEncoder->finished = 0;
+	this->rightEncoder->last_error = 0;
+	this->rightEncoder->segment = 0;
+	this->rightEncoder->finished = 0;
+
+	this->leftEncoderConfig = new EncoderConfig();
+	this->rightEncoderConfig = new EncoderConfig();
+
+	this->leftEncoderConfig->initial_position = this->leftMaster->GetSelectedSensorPosition(this->PIDLoopIDX);
+	this->leftEncoderConfig->ticks_per_revolution = 1024;
+	this->leftEncoderConfig->wheel_circumference = this->wheelCircumference;
+	this->leftEncoderConfig->kp = 0.1;
+	this->leftEncoderConfig->ki = 0.0;
+	this->leftEncoderConfig->kd = 0.0;
+	this->leftEncoderConfig->kv = 1.0 / this->maxVel;
+	this->leftEncoderConfig->ka = 0.0;
+	this->rightEncoderConfig->initial_position = this->rightMaster->GetSelectedSensorPosition(this->PIDLoopIDX);
+	this->rightEncoderConfig->ticks_per_revolution = 1024;
+	this->rightEncoderConfig->wheel_circumference = this->wheelCircumference;
+	this->rightEncoderConfig->kp = 0.1;
+	this->rightEncoderConfig->ki = 0.0;
+	this->rightEncoderConfig->kd = 0.0;
+	this->rightEncoderConfig->kv = 1.0 / this->maxVel;
+	this->rightEncoderConfig->ka = 0.0;
+
+	this->pigeonReference = this->pigeonReference + this->pigeon->GetFusedHeading();
+	this->pigeon->SetFusedHeading(0.0, this->timeoutMS);
 }
 
-void RobotLogic::AutonFollowTrajectory(){
-	double l = pathfinder_follow_encoder(leftEncoderConfig, &leftEncoder, leftTrajectory, trajectoryLength, this->leftMaster->GetSelectedSensorPosition(this->PIDLoopIDX));
-	double r = pathfinder_follow_encoder(rightEncoderConfig, &rightEncoder, rightTrajectory, trajectoryLength, this->rightMaster->GetSelectedSensorPosition(this->PIDLoopIDX));
-	this->leftMaster->Set(ControlMode::PercentOutput, l);
-	this->rightMaster->Set(ControlMode::PercentOutput, r);
+void RobotLogic::AutonFollowTrajectory(Segment * leftTrajectory, Segment * rightTrajectory, int trajectoryLength){
+	double l = pathfinder_follow_encoder(*leftEncoderConfig, leftEncoder, leftTrajectory, trajectoryLength, this->leftMaster->GetSelectedSensorPosition(this->PIDLoopIDX));
+	double r = pathfinder_follow_encoder(*rightEncoderConfig, rightEncoder, rightTrajectory, trajectoryLength, this->rightMaster->GetSelectedSensorPosition(this->PIDLoopIDX));
+
+	double gyroHeading = this->pigeon->GetFusedHeading();
+	double desiredHeading = r2d(this->leftEncoder->heading);
+	double angleDifference = std::fmod(desiredHeading - gyroHeading, 360.0);
+	if(angleDifference > 180.0){
+		angleDifference = angleDifference - 360;
+	}
+	//double angleDifference = desiredHeading - gyroHeading;
+
+	double turn = 0.4 * (-1.0/80) * angleDifference;
+
+	leftOutput = l + turn;
+	rightOutput = r - turn;
+
+	this->leftMaster->Set(ControlMode::PercentOutput, l + turn);
+	this->leftFollower->Set(ControlMode::PercentOutput, l + turn);
+	this->rightMaster->Set(ControlMode::PercentOutput, r - turn);
+	this->rightFollower->Set(ControlMode::PercentOutput, r - turn);
 }
 
-void RobotLogic::AutonBuildTrajectory(Waypoint * points, int numPoints){
-	TrajectoryCandidate candidate;
-	pathfinder_prepare(points, numPoints, FIT_HERMITE_CUBIC, PATHFINDER_SAMPLES_HIGH, this->timeStep, this->maxVel, this->maxAcc, this->maxJer, &candidate);
-	trajectoryLength = candidate.length;
-	trajectory = (Segment*)malloc(trajectoryLength * sizeof(Segment));
-	leftTrajectory = (Segment*)malloc(trajectoryLength * sizeof(Segment));
-	rightTrajectory = (Segment*)malloc(trajectoryLength * sizeof(Segment));
-	pathfinder_generate(&candidate, trajectory);
-	pathfinder_modify_tank(trajectory, trajectoryLength, leftTrajectory, rightTrajectory, this->wheelbaseWidth);
+void RobotLogic::AutonFollowReverseTrajectory(Segment * leftTrajectory, Segment * rightTrajectory, int trajectoryLength){
+	double r = pathfinder_follow_encoder(*leftEncoderConfig, leftEncoder, leftTrajectory, trajectoryLength, -1*this->leftMaster->GetSelectedSensorPosition(this->PIDLoopIDX));
+	double l = pathfinder_follow_encoder(*rightEncoderConfig, rightEncoder, rightTrajectory, trajectoryLength, -1*this->rightMaster->GetSelectedSensorPosition(this->PIDLoopIDX));
+
+	double gyroHeading = this->pigeon->GetFusedHeading();
+	double desiredHeading = r2d(this->leftEncoder->heading);
+	double angleDifference = std::fmod(desiredHeading - gyroHeading, 360.0);
+	if(angleDifference > 180.0){
+		angleDifference = angleDifference - 360;
+	}
+	//double angleDifference = desiredHeading - gyroHeading;
+
+	double turn = 0.4 * (-1.0/80) * angleDifference;
+
+
+	leftOutput = -1*l + turn;
+	rightOutput = -1*r - turn;
+
+	this->leftMaster->Set(ControlMode::PercentOutput, leftOutput);
+	this->leftFollower->Set(ControlMode::PercentOutput, leftOutput);
+	this->rightMaster->Set(ControlMode::PercentOutput, rightOutput);
+	this->rightFollower->Set(ControlMode::PercentOutput, rightOutput);
+}
+
+void RobotLogic::AutonSetBearing(int degrees){
+	this->targetBearing = degrees - this->pigeonReference;
+}
+
+void RobotLogic::AutonTurn(){
+	this->AutonTurn(this->targetBearing);
+}
+
+void RobotLogic::AutonTurn(int degrees){
+	double gyroHeading = this->pigeon->GetFusedHeading();
+	//double desiredHeading = degrees - this->Mod(this->pigeonReference, 360);
+	double desiredHeading = degrees;
+	/*double angleDifference = std::fmod(desiredHeading - gyroHeading, 360.0);
+		if(angleDifference > 180.0){
+			angleDifference = angleDifference - 360;
+		}*/
+	//double angleDifference = desiredHeading - gyroHeading;
+	double angleDifference = this->AngleDifference(desiredHeading, gyroHeading);
+	this->angleDifference = angleDifference;
+	double derivative = (angleDifference - this->turnPrevError);
+	double turn = 3.0/80 * angleDifference + 25.0/80 * derivative;
+	this->turnPrevError = angleDifference;
+
+	this->leftOutput = turn;
+	this->rightOutput = -turn;
+
+	this->leftMaster->Set(ControlMode::PercentOutput, turn);
+	this->leftFollower->Set(ControlMode::PercentOutput, turn);
+	this->rightMaster->Set(ControlMode::PercentOutput, -turn);
+	this->rightFollower->Set(ControlMode::PercentOutput, -turn);
+}
+
+void RobotLogic::AutonMoveArm(){
+	this->arm->Set(ControlMode::Position, this->armTarget);
+}
+
+void RobotLogic::AutonMoveArm(int target, int multiplier){
+	if(abs(this->armTarget - target) > PID_ARM_MULTIPLIER * multiplier){
+		int dir = 1;
+		if (target < this->armTarget){
+			dir = -1;
+		}
+		this->armTarget = this->armTarget + dir*PID_ARM_MULTIPLIER * multiplier;
+	}
+	this->AutonMoveArm();
 }
 
 void RobotLogic::AutonFreeEncoders(){
-	//free(this->leftEncoder);
-	//free(this->rightEncoder);
+	delete this->leftEncoder;
+	delete this->rightEncoder;
+	delete this->leftEncoderConfig;
+	delete this->rightEncoderConfig;
 }
 
 void RobotLogic::AutonCleanTrajectory(){
-	free(trajectory);
-	free(leftTrajectory);
-	free(rightTrajectory);
+	//free(trajectory);
+	//free(leftTrajectory);
+	//free(rightTrajectory);
 }
 
 RobotLogic::~RobotLogic() {

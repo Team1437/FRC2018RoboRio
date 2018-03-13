@@ -11,7 +11,7 @@
 #ifndef SRC_INPUTCONTROL_H_
 #define SRC_INPUTCONTROL_H_
 
-#define ARCADE_JOYSTICK 0
+/*#define ARCADE_JOYSTICK 0
 #define ARCADE_PS4 1
 #define TANK_JOYSTICK 2
 #define TANK_PS4 3
@@ -19,15 +19,12 @@
 #define JOYSTICK_THROTTLE 5
 #define ARCADE_LOGITECH 6
 #define TANK_LOGITECH 7
-#define DUAL_DRIVER_LOGITECH_THROTTLE 8
+#define DUAL_DRIVER_LOGITECH_THROTTLE 8*/
+#define FINAL_CONTROL 9
+#define FINAL_CONTROL_SINGLE_ARCADE 10
 
 class InputControl {
 private:
-	TalonSRX * left = NULL;
-	TalonSRX * right = NULL;
-	TalonSRX * arm = NULL;
-	TalonSRX * leftClaw = NULL;
-	TalonSRX * rightClaw = NULL;
 
 	double leftThrottleMult = 1.0;
 	double rightThrottleMult = 1.0;
@@ -48,11 +45,6 @@ public:
 	InputControl(int);
 	virtual ~InputControl();
 
-	void SetLeftMotor(TalonSRX *);
-	void SetRightMotor(TalonSRX *);
-	void SetArmMotor(TalonSRX *);
-	void SetLeftClawMotor(TalonSRX *);
-	void SetRightClawMotor(TalonSRX *);
 	void SetLeftThrottleMult(double);
 	void SetRightThrottleMult(double);
 	void SetLeftTurnMult(double);
@@ -92,9 +84,6 @@ public:
 	bool GetButtonArmHigh();
 
 	int GetMode();
-
-	void Drive();
-	void MoveArm();
 };
 
 #endif /* SRC_INPUTCONTROL_H_ */
