@@ -8,7 +8,7 @@
 #include <AutonScripts/LeftScale.h>
 
 LeftScale::LeftScale(RobotLogic * bot) : AutonScript(2, bot){
-	int numPoints_1 = 5;
+	int numPoints_1 = 4;
 	Waypoint * points_1 = (Waypoint*)malloc(numPoints_1 * sizeof(Waypoint));
 	/*Waypoint p11 = { 0, 0, 0 };
 	Waypoint p12 = { 2, 1, d2r(30) };
@@ -16,21 +16,21 @@ LeftScale::LeftScale(RobotLogic * bot) : AutonScript(2, bot){
 	Waypoint p14 = {6, 1, d2r(-30)};
 	Waypoint p15 = {7.5, 0, 0};*/
 	Waypoint p11 = { 0, 0, 0 };
-	Waypoint p12 = { 2, 1, d2r(30) };
-	Waypoint p13 = {4, 2, 0};
-	Waypoint p14 = {6, 1, d2r(-30)};
-	Waypoint p15 = {8.4, 0.125, 0};
+	Waypoint p12 = { 2, 0, 0 };
+	Waypoint p13 = {4, 0, 0};
+	Waypoint p14 = {8.75, -0.5, 0};
+	//Waypoint p15 = {7.25, -0.25, 0};
 	points_1[0] = p11;
 	points_1[1] = p12;
 	points_1[2] = p13;
 	points_1[3] = p14;
-	points_1[4] = p15;
+	//points_1[4] = p15;
 
 	int numPoints_2 = 3;
 	Waypoint * points_2 = (Waypoint*)malloc(numPoints_2 * sizeof(Waypoint));
 	Waypoint p21 = {0, 0, 0 };
 	Waypoint p22 = {1.5, 0.5, d2r(30) };
-	Waypoint p23 = {2.5, 2, 0};
+	Waypoint p23 = {2.0, 2, 0};
 	points_2[0] = p21;
 	points_2[1] = p22;
 	points_2[2] = p23;
@@ -59,12 +59,12 @@ void LeftScale::RunScript(){
 	}
 	case 4: {
 		bot->AutonMoveArm();
-		//bot->ClawWristExtend();
+		bot->ClawWristExtend();
 		break;
 	}
 	case 5: {
 		bot->AutonMoveArm();
-		bot->ClawSpitFast();
+		bot->ClawSpitSpeed(-0.60);
 		break;
 	}
 	case 6: {
@@ -79,11 +79,11 @@ void LeftScale::RunScript(){
 	}
 	case 8: {
 		bot->AutonMoveArm();
-		bot->AutonTurn();
+		//bot->AutonTurn();
 		bot->ClawWristExtend();
 		break;
 	}
-	case 9: {
+	/*case 9: {
 		bot->ClawWristExtend();
 		bot->ClawOpen();
 		bot->AutonFollowTrajectory(this->leftTrajectories[1], this->rightTrajectories[1], this->trajectoriesLength[1]);
@@ -92,7 +92,7 @@ void LeftScale::RunScript(){
 	case 10: {
 		bot->ClawClose();
 		break;
-	}
+	}*/
 	}
 }
 
@@ -101,6 +101,7 @@ void LeftScale::CheckFlags(){
 	case 0: {
 		if(bot->leftEncoder->finished == 1 && bot->rightEncoder->finished == 1){
 			stage = 1;
+			bot->DriveOff();
 			bot->AutonSetBearing(90);
 		}
 		break;
@@ -153,30 +154,32 @@ void LeftScale::CheckFlags(){
 	case 7: {
 		if(abs(bot->armTarget - PID_LOW_TARGET) < PID_ARM_MULTIPLIER * armEndingRangeMultiplier * armLowerMultiplier){
 			stage = 8;
-			bot->AutonSetBearing(180);
+			bot->DriveOff();
+			//bot->AutonSetBearing(180);
 		}
 		break;
 	}
 	case 8: {
-		double heading = bot->pigeon->GetFusedHeading();
+		/*double heading = bot->pigeon->GetFusedHeading();
 		if(abs(bot->angleDifference) < 10 && abs(heading-prevHeading) < 0.2){
-			stage = 9;
+			//stage = 9;
 			bot->DriveOff();
-			bot->AutonFreeEncoders();
-			bot->AutonInitEncoders();
+			//bot->AutonFreeEncoders();
+			//bot->AutonInitEncoders();
 		}
-		this->prevHeading = heading;
+		this->prevHeading = heading;*/
 		break;
 	}
-	case 9: {
+	/*case 9: {
 		if(bot->leftEncoder->finished == 1 && bot->rightEncoder->finished == 1){
 			stage = 10;
+			bot->DriveOff();
 		}
 		break;
 	}
 	case 10: {
 		break;
-	}
+	}*/
 	}
 }
 

@@ -156,7 +156,7 @@ int InputControl::GetAxisArmChange(){
 bool InputControl::GetButtonClawTogglePressed(){
 	switch(mode){
 	case FINAL_CONTROL:
-		return joy2->GetRawButtonPressed(6);
+		return joy1->GetRawButtonPressed(6);
 	case FINAL_CONTROL_SINGLE_ARCADE:
 		return joy1->GetRawButtonPressed(6);
 	default:
@@ -167,9 +167,43 @@ bool InputControl::GetButtonClawTogglePressed(){
 bool InputControl::GetButtonClawToggle(){
 	switch(mode){
 	case FINAL_CONTROL:
+		return joy1->GetRawButton(6);
+	case FINAL_CONTROL_SINGLE_ARCADE:
+		return joy1->GetRawButton(6);
+	default:
+		return false;
+	}
+}
+
+bool InputControl::GetButtonClawOpen(){
+	switch(mode){
+	case FINAL_CONTROL:
+		return joy2->GetRawButton(8);
+	case FINAL_CONTROL_SINGLE_ARCADE:
+		return joy1->GetRawButton(6);
+	default:
+		return false;
+	}
+}
+
+bool InputControl::GetButtonClawClose(){
+	switch(mode){
+	case FINAL_CONTROL:
 		return joy2->GetRawButton(6);
 	case FINAL_CONTROL_SINGLE_ARCADE:
 		return joy1->GetRawButton(6);
+	default:
+		return false;
+	}
+}
+
+
+bool InputControl::GetButtonClawClosePressed(){
+	switch(mode){
+	case FINAL_CONTROL:
+		return joy2->GetRawButtonPressed(6);
+	case FINAL_CONTROL_SINGLE_ARCADE:
+		return joy1->GetRawButtonPressed(6);
 	default:
 		return false;
 	}
@@ -188,7 +222,7 @@ bool InputControl::GetButtonClawWristToggle(){
 bool InputControl::GetButtonClawSuck(){
 	switch(mode){
 	case FINAL_CONTROL:
-		return joy2->GetRawButton(8);
+		return joy1->GetRawButton(8);
 	case FINAL_CONTROL_SINGLE_ARCADE:
 		return joy1->GetRawButton(8);
 	default:

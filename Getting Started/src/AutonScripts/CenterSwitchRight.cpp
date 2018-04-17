@@ -11,8 +11,8 @@ CenterSwitchRight::CenterSwitchRight(RobotLogic * bot) : AutonScript(1, bot){
 	int numPoints_1 = 3;
 	Waypoint * points_1 = (Waypoint*)malloc(numPoints_1 * sizeof(Waypoint));
 	Waypoint p11 ={0, 0, 0};
-	Waypoint p12 = {1.5, -0.75, d2r(-15)};
-	Waypoint p13 = {3.25, -1, 0};
+	Waypoint p12 = {1.5, -0.75, d2r(-20)};
+	Waypoint p13 = {3.85, -1.25, 0};
 	points_1[0] = p11;
 	points_1[1] = p12;
 	points_1[2] = p13;
@@ -50,10 +50,12 @@ void CenterSwitchRight::RunScript(){
 		break;
 	}
 	case 1: {
-		bot->ClawSpitFast();
+		bot->AutonMoveArm(PID_AUTO_TARGET, armRaiseMultiplier);
+		bot->ClawWristExtend();
 		break;
 	}
 	case 2: {
+		bot->ClawOpen();
 		break;
 	}
 	/*case 3:{
@@ -79,6 +81,7 @@ void CenterSwitchRight::CheckFlags(){
 	case 0: {
 		if(bot->leftEncoder->finished == 1 && bot->rightEncoder->finished == 1){
 			stage = 1;
+			bot->DriveOff();
 			timer.Start();
 		}
 		break;
@@ -92,11 +95,13 @@ void CenterSwitchRight::CheckFlags(){
 		break;
 	}
 	case 2: {
-		if(timer.Get() > 1.0){
+		if(timer.Get() > 3.0){
 			//stage = 3;
-			bot->AutonFreeEncoders();
-			bot->AutonInitEncoders();
-			bot->ClawNeutralSuck();
+			//bot->AutonFreeEncoders();
+			//bot->AutonInitEncoders();
+			bot->ClawClose();
+			bot->ClawWristRetract();
+			bot->AutonMoveArm(PID_LOW_TARGET, armLowerMultiplier);
 			//bot->AutonSetBearing(180);
 		}
 		break;

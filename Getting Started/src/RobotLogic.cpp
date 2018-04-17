@@ -33,6 +33,7 @@ void RobotLogic::SetRightFollowerMotor(VictorSPX * rightFollower){
 void RobotLogic::SetArmMotor(TalonSRX * arm){
 	this->arm = arm;
 }
+//void RobotLogic::SetLeftClawMotor(VictorSPX * leftClaw){
 void RobotLogic::SetLeftClawMotor(TalonSRX * leftClaw){
 	this->leftClaw = leftClaw;
 }
@@ -152,6 +153,11 @@ void RobotLogic::ConfigureArmPIDSoftlimit(){
 	this->arm->ConfigReverseSoftLimitEnable(false, this->timeoutMS);
 }
 
+void RobotLogic::ConfigureVision(char* str, double imgWidth){
+	this->table = nt::NetworkTableInstance::GetDefault().GetTable(str);
+	this->imgWidth = imgWidth;
+}
+
 
 void RobotLogic::SetMode(){
 	if(this->control->GetButtonKill()){
@@ -208,19 +214,19 @@ void RobotLogic::Kill(){
 
 
 void RobotLogic::ClawOpen(){
-	this->claw->Set(frc::DoubleSolenoid::Value::kForward);
+	this->claw->Set(frc::DoubleSolenoid::Value::kReverse);
 	this->clawEnabled = true;
 }
 void RobotLogic::ClawClose(){
-	this->claw->Set(frc::DoubleSolenoid::Value::kReverse);
+	this->claw->Set(frc::DoubleSolenoid::Value::kForward);
 	this->clawEnabled = false;
 }
 void RobotLogic::ClawWristExtend(){
-	this->clawWrist->Set(frc::DoubleSolenoid::Value::kForward);
+	this->clawWrist->Set(frc::DoubleSolenoid::Value::kReverse);
 	this->clawWristEnabled = false;
 }
 void RobotLogic::ClawWristRetract(){
-	this->clawWrist->Set(frc::DoubleSolenoid::Value::kReverse);
+	this->clawWrist->Set(frc::DoubleSolenoid::Value::kForward);
 	this->clawWristEnabled = true;
 }
 
@@ -229,18 +235,22 @@ void RobotLogic::ClawNeutralSuck(){
 	rightClaw->Set(ControlMode::PercentOutput, 0.1);
 }
 void RobotLogic::ClawSuck(){
-	leftClaw->Set(ControlMode::PercentOutput, 0.5);
-	rightClaw->Set(ControlMode::PercentOutput, 0.5);
+	leftClaw->Set(ControlMode::PercentOutput, 0.6);
+	rightClaw->Set(ControlMode::PercentOutput, 0.6);
 }
 void RobotLogic::ClawSpitSlow(){
+	leftClaw->Set(ControlMode::PercentOutput, -0.6);
+	rightClaw->Set(ControlMode::PercentOutput, -0.6);
+}
+void RobotLogic::ClawSpitFast(){
 	leftClaw->Set(ControlMode::PercentOutput, -0.8);
 	rightClaw->Set(ControlMode::PercentOutput, -0.8);
 }
-void RobotLogic::ClawSpitFast(){
-	leftClaw->Set(ControlMode::PercentOutput, -1.0);
-	rightClaw->Set(ControlMode::PercentOutput, -1.0);
-}
 
+void RobotLogic::ClawSpitSpeed(double speed){
+	leftClaw->Set(ControlMode::PercentOutput, speed);
+	rightClaw->Set(ControlMode::PercentOutput, speed);
+}
 
 void RobotLogic::PIDSetPositionLow(){
 	this->armTarget = PID_LOW_TARGET;
@@ -272,7 +282,10 @@ void RobotLogic::PIDMoveArm(){
 		this->PIDMoveArmThrottle();
 	} else {*/
 	double change = this->control->GetAxisArmChange(); // GET RAW AXIS ARM NEEDS TO BE CHANGED WHEN ROBOTLOGIC IS IMPLEMENTED
-	this->armTarget = this->armTarget + change;
+	int temp = this->armTarget + change;
+	if(!(temp > PID_INITIAL || temp < PID_MAX)){
+		this->armTarget = temp;
+	}
 	this->arm->Set(ControlMode::Position, this->armTarget);
 	//}
 }
@@ -312,6 +325,13 @@ void RobotLogic::DirectControlClaw(){
 		this->clawWristEnabled = !this->clawWristEnabled;
 	}
 
+	if(control->GetButtonClawClose()){
+		clawEnabled = false;
+	}
+	if(control->GetButtonClawOpen()){
+		clawEnabled = true;
+	}
+
 	if(clawEnabled){
 		this->ClawOpen();
 	} else {
@@ -324,7 +344,7 @@ void RobotLogic::DirectControlClaw(){
 	}
 
 	//Claw Motors
-	if(control->GetButtonClawSuck() || control->GetButtonClawToggle()){
+	if(control->GetButtonClawSuck() || control->GetButtonClawToggle() || control->GetButtonClawClose()){
 		this->ClawSuck();
 	} else if(control->GetButtonClawSpitFast()){
 		this->ClawSpitFast();
@@ -508,6 +528,67 @@ void RobotLogic::AutonCleanTrajectory(){
 	//free(trajectory);
 	//free(leftTrajectory);
 	//free(rightTrajectory);
+}
+
+double RobotLogic::AutonVisionTrack(){
+	std::vector<double> contour = table.get()->GetNumberArray("Contour", llvm::ArrayRef<double>());
+	double turn = 0.0;
+	if(contour.size() > 0){
+		double x = contour[0];
+		double w = contour[2];
+		double rectCenterX = (x + w/2.0 - this->imgWidth/2.0)/(imgWidth/2.0);
+
+		turn = rectCenterX * 0.25;
+	}
+	this->leftMaster->Set(ControlMode::PercentOutput, turn);
+	this->leftFollower->Set(ControlMode::PercentOutput, turn);
+	this->rightMaster->Set(ControlMode::PercentOutput, -turn);
+	this->rightFollower->Set(ControlMode::PercentOutput, -turn);
+
+	return turn;
+}
+
+double RobotLogic::AutonVisionFollow(double speed){
+	std::vector<double> contour = table.get()->GetNumberArray("Contour", llvm::ArrayRef<double>());
+	double turn = 0.0;
+	if(contour.size() > 0){
+		double x = contour[0];
+		double w = contour[2];
+		double rectCenterX = (x + w/2.0 - this->imgWidth/2.0)/(imgWidth/2.0);
+
+		turn = rectCenterX * 0.10;
+	}
+	this->leftMaster->Set(ControlMode::PercentOutput, speed + turn);
+	this->leftFollower->Set(ControlMode::PercentOutput, speed + turn);
+	this->rightMaster->Set(ControlMode::PercentOutput, speed - turn);
+	this->rightFollower->Set(ControlMode::PercentOutput, speed - turn);
+
+	return turn;
+}
+
+void RobotLogic::AutonFollow(double speed){
+	int degrees = this->targetBearing;
+	double gyroHeading = this->pigeon->GetFusedHeading();
+	//double desiredHeading = degrees - this->Mod(this->pigeonReference, 360);
+	double desiredHeading = degrees;
+	/*double angleDifference = std::fmod(desiredHeading - gyroHeading, 360.0);
+		if(angleDifference > 180.0){
+			angleDifference = angleDifference - 360;
+		}*/
+	//double angleDifference = desiredHeading - gyroHeading;
+	double angleDifference = this->AngleDifference(desiredHeading, gyroHeading);
+	this->angleDifference = angleDifference;
+	double derivative = (angleDifference - this->turnPrevError);
+	double turn = 3.0/80 * angleDifference + 25.0/80 * derivative;
+	this->turnPrevError = angleDifference;
+
+	this->leftOutput = turn;
+	this->rightOutput = -turn;
+
+	this->leftMaster->Set(ControlMode::PercentOutput, speed + turn);
+	this->leftFollower->Set(ControlMode::PercentOutput, speed + turn);
+	this->rightMaster->Set(ControlMode::PercentOutput, speed - turn);
+	this->rightFollower->Set(ControlMode::PercentOutput, speed - turn);
 }
 
 RobotLogic::~RobotLogic() {

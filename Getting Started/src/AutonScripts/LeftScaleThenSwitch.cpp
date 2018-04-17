@@ -1,40 +1,47 @@
 /*
- * RightScale.cpp
+ * LeftScaleThenSwitch.cpp
  *
- *  Created on: Mar 11, 2018
+ *  Created on: Apr 16, 2018
  *      Author: PatriotRobotics
  */
 
-#include <AutonScripts/RightScale.h>
+#include <AutonScripts/LeftScaleThenSwitch.h>
 
-RightScale::RightScale(RobotLogic * bot) : AutonScript(2, bot){
+LeftScaleThenSwitch::LeftScaleThenSwitch(RobotLogic * bot) : AutonScript(2, bot){
 	int numPoints_1 = 4;
 	Waypoint * points_1 = (Waypoint*)malloc(numPoints_1 * sizeof(Waypoint));
+	/*Waypoint p11 = { 0, 0, 0 };
+		Waypoint p12 = { 2, 1, d2r(30) };
+		Waypoint p13 = {4, 2, 0};
+		Waypoint p14 = {6, 1, d2r(-30)};
+		Waypoint p15 = {7.5, 0, 0};*/
 	Waypoint p11 = { 0, 0, 0 };
 	Waypoint p12 = { 2, 0, 0 };
 	Waypoint p13 = {4, 0, 0};
-	Waypoint p14 = {7.4, 0, 0};
-	//Waypoint p15 = {8.65, -0.125, 0};
+	Waypoint p14 = {8.75, -0.5, 0};
+	//Waypoint p15 = {7.25, -0.25, 0};
 	points_1[0] = p11;
 	points_1[1] = p12;
 	points_1[2] = p13;
 	points_1[3] = p14;
 	//points_1[4] = p15;
 
-	int numPoints_2 = 3;
+	int numPoints_2 = 4;
 	Waypoint * points_2 = (Waypoint*)malloc(numPoints_2 * sizeof(Waypoint));
 	Waypoint p21 = {0, 0, 0 };
-	Waypoint p22 = {2, -1, d2r(-30) };
-	Waypoint p23 = {4, -2, 0};
+	Waypoint p22 = {1.0, -0.25, 0};
+	Waypoint p23 = {2.25, 0.25, d2r(30) };
+	Waypoint p24 = {2.75, 1.25, d2r(90)};
 	points_2[0] = p21;
 	points_2[1] = p22;
 	points_2[2] = p23;
+	points_2[3] = p24;
 
 	this->BuildTrajectory(points_1, numPoints_1, 0);
 	this->BuildTrajectory(points_2, numPoints_2, 1);
 }
 
-void RightScale::RunScript(){
+void LeftScaleThenSwitch::RunScript(){
 	bot->AutonMoveArm();
 	switch(stage){
 	case 0: {
@@ -59,7 +66,7 @@ void RightScale::RunScript(){
 	}
 	case 5: {
 		bot->AutonMoveArm();
-		bot->ClawSpitSpeed(-0.45);
+		bot->ClawSpitSpeed(-0.60);
 		break;
 	}
 	case 6: {
@@ -75,29 +82,58 @@ void RightScale::RunScript(){
 	case 8: {
 		bot->AutonMoveArm();
 		bot->AutonTurn();
-		bot->ClawWristExtend();
+		bot->ClawWristRetract();
 		break;
 	}
 	case 9: {
-		bot->ClawWristExtend();
-		bot->ClawOpen();
+		bot->ClawWristRetract();
+		bot->ClawClose();
 		bot->AutonFollowTrajectory(this->leftTrajectories[1], this->rightTrajectories[1], this->trajectoriesLength[1]);
 		break;
 	}
 	case 10: {
+		bot->AutonTurn();
+		break;
+	}
+	case 11: {
+		bot->ClawWristExtend();
+		bot->ClawSuck();
+		bot->AutonVisionFollow(0.45);
+		break;
+	}
+	case 12: {
+		bot->ClawNeutralSuck();
+		bot->AutonFollow(-0.4);
+		break;
+	}
+	case 13: {
+		bot->AutonMoveArm(PID_AUTO_TARGET, this->armRaiseMultiplier);
+		bot->ClawWristExtend();
+		break;
+	}
+	case 14: {
+		bot->ClawOpen();
+		break;
+	}
+	case 15: {
+		bot->ClawWristRetract();
+		break;
+	}
+	case 16: {
+		bot->AutonMoveArm(PID_LOW_TARGET, this->armLowerMultiplier);
 		bot->ClawClose();
 		break;
 	}
 	}
 }
 
-void RightScale::CheckFlags(){
+void LeftScaleThenSwitch::CheckFlags(){
 	switch(stage){
 	case 0: {
 		if(bot->leftEncoder->finished == 1 && bot->rightEncoder->finished == 1){
 			stage = 1;
 			bot->DriveOff();
-			bot->AutonSetBearing(-100);
+			bot->AutonSetBearing(90);
 		}
 		break;
 	}
@@ -112,7 +148,7 @@ void RightScale::CheckFlags(){
 		break;
 	}
 	case 2:{
-		if(timer.Get() > 1){
+		if(timer.Get() > 0.2){
 			stage = 3;
 		}
 		break;
@@ -125,7 +161,7 @@ void RightScale::CheckFlags(){
 		break;
 	}
 	case 4: {
-		if(timer.Get() > 3.0){
+		if(timer.Get() > 2.0){
 			stage = 5;
 			timer.Reset();
 			timer.Start();
@@ -141,7 +177,7 @@ void RightScale::CheckFlags(){
 		break;
 	}
 	case 6: {
-		if(timer.Get() > 1){
+		if(timer.Get() > 0.2){
 			stage = 7;
 		}
 		break;
@@ -149,6 +185,7 @@ void RightScale::CheckFlags(){
 	case 7: {
 		if(abs(bot->armTarget - PID_LOW_TARGET) < PID_ARM_MULTIPLIER * armEndingRangeMultiplier * armLowerMultiplier){
 			stage = 8;
+			bot->DriveOff();
 			bot->AutonSetBearing(180);
 		}
 		break;
@@ -168,15 +205,69 @@ void RightScale::CheckFlags(){
 		if(bot->leftEncoder->finished == 1 && bot->rightEncoder->finished == 1){
 			stage = 10;
 			bot->DriveOff();
+			bot->AutonSetBearing(180);
 		}
 		break;
 	}
 	case 10: {
+		double heading = bot->pigeon->GetFusedHeading();
+		if(abs(bot->angleDifference) < 10 && abs(heading-prevHeading) < 0.2){
+			stage = 11;
+			bot->DriveOff();
+			timer.Reset();
+			timer.Start();
+			//bot->AutonFreeEncoders();
+			//bot->AutonInitEncoders();
+		}
+		this->prevHeading = heading;
+		break;
+	}
+	case 11: {
+		if (timer.Get() > 1.5){
+			stage = 12;
+			bot->DriveOff();
+			bot->AutonSetBearing(180);
+			timer.Reset();
+			timer.Start();
+		}
+		break;
+	}
+	case 12: {
+		if(timer.Get() > 0.5){
+			stage = 13;
+			bot->DriveOff();
+		}
+		break;
+	}
+	case 13: {
+		if(abs(bot->armTarget - PID_AUTO_TARGET) < PID_ARM_MULTIPLIER * armEndingRangeMultiplier * armRaiseMultiplier){
+			stage = 14;
+			timer.Start();
+		}
+		break;
+	}
+	case 14: {
+		if(timer.Get() > 1.5){
+			stage = 15;
+			timer.Reset();
+			timer.Start();
+		}
+		break;
+	}
+	case 15: {
+		if(timer.Get() > 1){
+			stage = 16;
+			bot->ClawNeutralSuck();
+		}
+		break;
+	}
+	case 16: {
 		break;
 	}
 	}
 }
 
-RightScale::~RightScale() {
+LeftScaleThenSwitch::~LeftScaleThenSwitch() {
 	// TODO Auto-generated destructor stub
 }
+

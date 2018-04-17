@@ -25,8 +25,11 @@ protected:
 	RobotLogic * bot = NULL;
 	frc::Timer timer;
 
-	double armRaiseMultiplier = 4.0;
-	double armLowerMultiplier = 3.0;
+	// POMONA SETTINGS
+	//double armRaiseMultiplier = 4.0;
+	//double armLowerMultiplier = 3.0;
+	double armRaiseMultiplier = 8.0;
+	double armLowerMultiplier = 6.0;
 	double armEndingRangeMultiplier = 1.1;
 
 	Segment** trajectories;

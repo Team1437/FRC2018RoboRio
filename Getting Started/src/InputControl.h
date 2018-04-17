@@ -68,6 +68,9 @@ public:
 
 	bool GetButtonClawToggle();
 	bool GetButtonClawTogglePressed();
+	bool GetButtonClawOpen();
+	bool GetButtonClawClose();
+	bool GetButtonClawClosePressed();
 	bool GetButtonClawWristToggle();
 	bool GetButtonClawSuck();
 	bool GetButtonClawSpitFast();

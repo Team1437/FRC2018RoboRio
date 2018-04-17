@@ -42,6 +42,7 @@
 
 class Robot : public frc::IterativeRobot {
 private:
+
 	//Unused initial variables
 	//frc::Joystick m_stick{0};
 	frc::LiveWindow& m_lw = *frc::LiveWindow::GetInstance();
@@ -52,8 +53,9 @@ private:
 	frc::PowerDistributionPanel * power = new PowerDistributionPanel(0);
 
 	//Variable declaration for camera and NetworkTable
-	cs::UsbCamera cam;
-	std::shared_ptr<nt::NetworkTable> table;
+	cs::UsbCamera cam1;
+	//cs::UsbCamera cam2;
+	//std::shared_ptr<nt::NetworkTable> table;
 
 	//Variable declaration for all the motors
 	TalonSRX * leftMaster;
@@ -61,6 +63,7 @@ private:
 	VictorSPX * leftFollower;
 	VictorSPX * rightFollower;
 	TalonSRX * arm;
+	//VictorSPX * leftClaw;
 	TalonSRX * leftClaw;
 	TalonSRX * rightClaw;
 
@@ -79,8 +82,7 @@ private:
 
 	//Variable declaration for variables that are used while the robot is running
 	bool auton;
-	std::vector<double> contour;
-	double imgWidth;
+	//std::vector<double> contour;
 
 	double previous[4];
 	int counter;
@@ -95,15 +97,7 @@ private:
 
 	AutonScript * script;
 
-	//int trajectories;
-	//int numPoints_1;
-	//Waypoint * points_1;
-	//int numPoints_2;
-	//Waypoint * points_2;
 
-	//bool stage0;
-	//bool stage1;
-	//bool stage2;
 public:
 	//This function runs every time the robot first turns on, will not run again until it is turned off and back on again
 	Robot() {
@@ -114,6 +108,7 @@ public:
 		leftMaster = new TalonSRX(LEFT_MASTER_ID);
 		rightMaster = new TalonSRX(RIGHT_MASTER_ID);
 		arm = new TalonSRX(ARM_ID);
+		//leftClaw = new VictorSPX(LEFT_CLAW_ID);
 		leftClaw = new TalonSRX(LEFT_CLAW_ID);
 		rightClaw = new TalonSRX(RIGHT_CLAW_ID);
 
@@ -123,8 +118,8 @@ public:
 		compressor = new Compressor(0);
 		compressor->SetClosedLoopControl(true);
 
-		control = new InputControl(FINAL_CONTROL_SINGLE_ARCADE);
-		control->SetDriveMultipliers(1.0, 1.0, 0.5, 0.5);
+		control = new InputControl(FINAL_CONTROL);
+		control->SetDriveMultipliers(1.0, 1.0, 0.375, 0.375);
 		control->SetArmMultiplier(PID_ARM_MULTIPLIER);
 
 		bot = new RobotLogic(control);
@@ -143,53 +138,27 @@ public:
 		bot->InitializeMotors();
 
 		bot->SetBotParameters(0.020, 6.0, 5.0, 10.0, 0.65405, 0.478778720);
+		bot->ConfigureVision("Vision", 160);
 
 		script = NULL;
 
 		joy = control->joy1;
 
 		//Start the camera stream with a resolution of 640x480
-		////cam = CameraServer::GetInstance()->StartAutomaticCapture();
-		cam.SetResolution(640, 480);
+		cam1 = CameraServer::GetInstance()->StartAutomaticCapture(0);
+		//cam2 = CameraServer::GetInstance()->StartAutomaticCapture(1);
+		cam1.SetResolution(640, 480);
+		//cam2.SetResolution(640, 480);
 		//CameraServer::GetInstance()->PutVideo("Rectangle", 640, 480);
+		//CameraServer::GetInstance()->PutVideo("Other", 640, 480);
 		pinRed = new frc::DigitalInput(9);
 		pinNothing = new frc::DigitalInput(8);
 
-		//Motor configuration:
-		// -- Make sure the motors all turn the right directions'
-		// -- Voltage compensation to have Set(ControlMode::PercentOutput, 0.1) tell the motors
-		//    to go to 10% of total output rather than 10% of maximum voltage (10% of max. voltage
-		//    would not actually turn on the motors)
-		// -- Set the rear motors to mimic any commands sent to the front motors, this is done since
-		//    all the motors on one side are connected to the same chain and need to be doign the same
-		//    commands as each other
-		//leftFront->SetInverted(true);
-		//leftRear->SetInverted(true);
-		//leftClaw->SetInverted(true);
-		//arm->SetInverted(false);
-
-		/*leftFront->EnableVoltageCompensation(true);
-		rightFront->EnableVoltageCompensation(true);
-		leftRear->EnableVoltageCompensation(true);
-		rightRear->EnableVoltageCompensation(true);
-		arm->EnableVoltageCompensation(true);*/
-		//leftClaw->EnableVoltageCompensation(true);
-		//rightClaw->EnableVoltageCompensation(true);
-
-		//rightRear->Set(ControlMode::Follower, 3);
-		//leftRear->Set(ControlMode::Follower, 1);
-
-		//leftRear->SetInverted(true);
-		//leftFront->SetInverted(true);
-
-		//rightFront->Set(ControlMode::Follower, 8);
-		//leftFront->Set(ControlMode::Follower, 3);
-
 		// Setup variables for auton (follow ball) mode
 		auton = false;
-		table = nt::NetworkTableInstance::GetDefault().GetTable("Vision");
-		imgWidth = 640;
 		counter = 0;
+
+		//table = nt::NetworkTableInstance::GetDefault().GetTable("Vision");
 
 		//Initialization of the rest of the variables
 		killed = false;
@@ -204,14 +173,15 @@ public:
 		bot->ConfigureRightPID(0.0, 0.0, 0.0, 0.0);
 		bot->ConfigureArmPID(0.0, ARM_P, ARM_I, ARM_D);
 
-
-
 	}
 
 	void RobotInit() override {
 	}
 
 	void AutonomousInit() override {
+
+		//timer.Start();
+
 		gameData = frc::DriverStation::GetInstance().GetGameSpecificMessage();
 		bot->pigeonReference = 0;
 		pigeon->SetFusedHeading(0, 10);
@@ -234,10 +204,10 @@ public:
 
 		if(position == LEFT){
 			if(gameData.length() > 0){
-				if(gameData[0] == 'L'){
-					script = new LeftSwitch(bot);
-				} else if(gameData[1] == 'L'){
+				if(gameData[1] == 'L'){
 					script = new LeftScale(bot);
+				} else if(gameData[0] == 'L'){
+					script = new LeftSwitch(bot);
 				} else {
 					script = new LeftHookSwitch(bot);
 				}
@@ -251,27 +221,35 @@ public:
 			}
 		} else if (position == RIGHT){
 			if(gameData.length() > 0){
-				if(gameData[0] == 'R'){
-					script = new RightSwitch(bot);
-				} else if(gameData[1] == 'R'){
+				if(gameData[1] == 'R'){
 					script = new RightScale(bot);
+				} else if(gameData[0] == 'R'){
+					script = new RightSwitch(bot);
 				} else {
 					script = new RightHookSwitch(bot);
 				}
+				/*if(gameData[0] == 'R'){
+					script = new RightSwitch(bot);
+				} else {
+					script = new RightHookSwitch(bot);
+				}*/
 			}
 		} else {
 
 		}
-		//script = new LeftSwitch(bot);
+
+		//script = new LeftScaleDouble(bot);
 
 
 		bot->AutonInitEncoders();
 		bot->ClawClose();
 		bot->ClawWristRetract();
 		bot->ClawNeutralSuck();
+
 	}
 
 	void AutonomousPeriodic() override {
+		/*
 		SmartDashboard::PutNumber("Arm Position", arm->GetSelectedSensorPosition(0));
 		SmartDashboard::PutNumber("Arm Velocity", arm->GetSelectedSensorVelocity(0));
 		SmartDashboard::PutNumber("Arm Target", bot->GetArmTarget() + control->GetAxisArmChange());
@@ -308,18 +286,22 @@ public:
 		SmartDashboard::PutNumber("Left Encoder Error", bot->leftEncoder->last_error);
 		SmartDashboard::PutNumber("Left Encoder Segment", bot->rightEncoder->last_error);
 		SmartDashboard::PutNumber("Left Encoder Finished", bot->leftEncoder->finished);
-		SmartDashboard::PutNumber("Timer", timer.Get());
+		SmartDashboard::PutNumber("Timer", timer.Get());*/
 
-		//SmartDashboard::PutNumber("Trajectory Length", bot->trajectoryLength[0]);
-		//SmartDashboard::PutNumber("Trajectory Length 2", bot->trajectoryLength[1]);
 
 		script->RunScript();
 		script->CheckFlags();
+		/*if(timer.Get() < 4.0){
+			this->leftMaster->Set(ControlMode::PercentOutput, 0.5);
+			this->leftFollower->Set(ControlMode::PercentOutput, 0.5);
+			this->rightMaster->Set(ControlMode::PercentOutput, 0.5);
+			this->rightFollower->Set(ControlMode::PercentOutput, 0.5);
+		}*/
 
 	}
 
 	void TeleopInit() override {
-		killed = false;
+		//killed = false;
 
 		//control->armTarget = 0;
 		//bot->ClawClose();
@@ -328,16 +310,21 @@ public:
 
 
 	void TeleopPeriodic() override {
-
+		/*
 		SmartDashboard::PutNumber("Arm Position", arm->GetSelectedSensorPosition(0));
 		SmartDashboard::PutNumber("Arm Velocity", arm->GetSelectedSensorVelocity(0));
-		SmartDashboard::PutNumber("Arm Target", arm->GetClosedLoopTarget(0));
+		//SmartDashboard::PutNumber("Arm Target", arm->GetClosedLoopTarget(0));
+		SmartDashboard::PutNumber("Bot Arm Target", bot->armTarget);*/
 
 		SmartDashboard::PutNumber("Left Position", leftMaster->GetSelectedSensorPosition(0));
 		SmartDashboard::PutNumber("Left Velocity", leftMaster->GetSelectedSensorVelocity(0));
 		SmartDashboard::PutNumber("Right Position", rightMaster->GetSelectedSensorPosition(0));
 		SmartDashboard::PutNumber("Right Velocity", rightMaster->GetSelectedSensorVelocity(0));
-
+		SmartDashboard::PutNumber("ARM OUTPUT", arm->GetMotorOutputPercent());
+		SmartDashboard::PutNumber("Bot Arm Target", bot->armTarget);
+		SmartDashboard::PutNumber("Arm Position", arm->GetSelectedSensorPosition(0));
+		SmartDashboard::PutNumber("Arm Current", arm->GetOutputCurrent());
+		/*
 		SmartDashboard::PutNumber("Voltage", power->GetVoltage());
 		SmartDashboard::PutNumber("Current", power->GetTotalCurrent());
 		SmartDashboard::PutNumber("Temperature", power->GetTemperature());
@@ -362,12 +349,17 @@ public:
 
 		//SmartDashboard::PutNumber("LEFT OUTPUT", 0);
 		//SmartDashboard::PutNumber("RIGHT OUTPUT", 0);
+		 */
+
+		//double turn = bot->AutonVisionTrack();
+		//SmartDashboard::PutNumber("Vision Turn", turn);
+
 		if(!killed){
-			SmartDashboard::PutNumber("STAGE", 2);
+			//SmartDashboard::PutNumber("STAGE", 2);
 			if (auton){
 				// This command gets the information about the targeted object from the
 				// NetworkTable, and stores it in the variable "contour"
-				contour = table.get()->GetNumberArray("Contour", llvm::ArrayRef<double>());
+				//contour = table.get()->GetNumberArray("Contour", llvm::ArrayRef<double>());
 			} else {
 				bot->DirectDrive();
 				bot->PIDMoveArm();
@@ -379,10 +371,30 @@ public:
 
 			}
 		}
+		//*/
 
 	}
 
-	void TestPeriodic() override {}
+	void TestInit() override{
+		SmartDashboard::PutNumber("Test", 1);
+	}
+
+	void TestPeriodic() override {
+		double turn = bot->AutonVisionFollow(0.35);
+		bot->ClawClose();
+		bot->ClawSuck();
+		SmartDashboard::PutNumber("Turn", turn);
+	}
+
+	/*void DisabledInit() override {
+		bot->ClawClose();
+		bot->ClawWristRetract();
+	}
+
+	void DisabledPeriodic() override {
+		bot->ClawClose();
+		bot->ClawWristRetract();
+	}*/
 };
 
 START_ROBOT_CLASS(Robot)

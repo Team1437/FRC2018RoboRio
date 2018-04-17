@@ -12,7 +12,7 @@ RightSwitch::RightSwitch(RobotLogic * bot) : AutonScript(1, bot){
 	Waypoint * points_1 = (Waypoint*)malloc(numPoints_1 * sizeof(Waypoint));
 	Waypoint p11 = { 0, 0, 0 };
 	Waypoint p12 = { 2, 0, 0};
-	Waypoint p13 = {4, 0, 0};
+	Waypoint p13 = {4.2, 0, 0};
 	points_1[0] = p11;
 	points_1[1] = p12;
 	points_1[2] = p13;
@@ -28,13 +28,24 @@ void RightSwitch::RunScript(){
 	}
 	case 1: {
 		bot->AutonTurn();
+		bot->AutonMoveArm(PID_AUTO_TARGET, armRaiseMultiplier);
 		break;
 	}
 	case 2: {
-		bot->ClawSpitFast();
 		break;
 	}
 	case 3: {
+		bot->ClawWristExtend();
+		break;
+	}
+	case 4: {
+		bot->ClawOpen();
+		break;
+	}
+	case 5: {
+		bot->AutonMoveArm(PID_LOW_TARGET, armLowerMultiplier);
+		bot->ClawWristRetract();
+		bot->ClawClose();
 		break;
 	}
 	}
@@ -45,6 +56,7 @@ void RightSwitch::CheckFlags(){
 	case 0: {
 		if(bot->leftEncoder->finished == 1 && bot->rightEncoder->finished == 1){
 			stage = 1;
+			bot->DriveOff();
 			bot->AutonSetBearing(90);
 		}
 		break;
@@ -53,22 +65,34 @@ void RightSwitch::CheckFlags(){
 		double heading = bot->pigeon->GetFusedHeading();
 		if(abs(bot->angleDifference) < 10 && abs(heading-prevHeading) < 0.2){
 			stage = 2;
-			bot->AutonFreeEncoders();
-			bot->AutonInitEncoders();
 			bot->DriveOff();
-			timer.Start();
 		}
 		this->prevHeading = heading;
 		break;
 	}
 	case 2: {
-		if(timer.Get() > 1){
+		if(abs(bot->armTarget - PID_AUTO_TARGET) < PID_ARM_MULTIPLIER * armEndingRangeMultiplier * armRaiseMultiplier){
 			stage = 3;
-			bot->ClawNeutralSuck();
+			timer.Start();
 		}
 		break;
 	}
 	case 3: {
+		if(timer.Get() > 1){
+			stage = 4;
+			timer.Reset();
+			timer.Start();
+		}
+		break;
+	}
+	case 4: {
+		if(timer.Get() > 2){
+			stage = 5;
+			bot->ClawNeutralSuck();
+		}
+		break;
+	}
+	case 5: {
 		break;
 	}
 	}

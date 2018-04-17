@@ -12,7 +12,7 @@ RightHookSwitch::RightHookSwitch(RobotLogic * bot) : AutonScript(3, bot){
 	Waypoint * points_1 = (Waypoint*)malloc(numPoints_1 * sizeof(Waypoint));
 	Waypoint p11 = {0, 0, 0};
 	Waypoint p12 = {3, 0, 0};
-	Waypoint p13 = {6.25, 1, 0};
+	Waypoint p13 = {5.25, 1, 0};
 	points_1[0] = p11;
 	points_1[1] = p12;
 	points_1[2] = p13;
@@ -59,19 +59,24 @@ void RightHookSwitch::RunScript(){
 		break;
 	}
 	case 4: {
+		bot->AutonMoveArm(PID_AUTO_TARGET, armRaiseMultiplier);
 		bot->AutonFollowTrajectory(this->leftTrajectories[2], this->rightTrajectories[2], this->trajectoriesLength[2]);
 		break;
 	}
 	case 5: {
-		bot->ClawSpitFast();
+		bot->ClawWristExtend();
 		break;
 	}
 	case 6: {
-		bot->ClawSpitFast();
+		bot->ClawOpen();
+		break;
 	}
 	case 7: {
+		bot->AutonMoveArm(PID_LOW_TARGET, armLowerMultiplier);
+		//bot->ClawWristRetract();
+		//bot->ClawClose();
 		bot->ClawNeutralSuck();
-		bot->AutonTurn();
+		//bot->AutonTurn();
 	}
 	case 8: {
 		bot->ClawOpen();
@@ -89,6 +94,7 @@ void RightHookSwitch::CheckFlags(){
 	case 0: {
 		if(bot->leftEncoder->finished == 1 && bot->rightEncoder->finished == 1){
 			stage = 1;
+			bot->DriveOff();
 			bot->AutonSetBearing(90);
 		}
 		break;
@@ -107,6 +113,7 @@ void RightHookSwitch::CheckFlags(){
 	case 2: {
 		if(bot->leftEncoder->finished == 1 && bot->rightEncoder->finished == 1){
 			stage = 3;
+			bot->DriveOff();
 			bot->AutonSetBearing(150);
 		}
 		break;
@@ -125,6 +132,7 @@ void RightHookSwitch::CheckFlags(){
 	case 4: {
 		if(bot->leftEncoder->finished == 1 && bot->rightEncoder->finished == 1){
 			stage = 5;
+			bot->DriveOff();
 			timer.Start();
 		}
 		break;
@@ -138,16 +146,16 @@ void RightHookSwitch::CheckFlags(){
 		break;
 	}
 	case 6: {
-		if(timer.Get() > 1){
+		if(timer.Get() > 3){
 			stage = 7;
-			bot->AutonSetBearing(180);
+			//bot->AutonSetBearing(180);
 		}
 		break;
 	}
 	case 7: {
 		double heading = bot->pigeon->GetFusedHeading();
 		if(abs(bot->angleDifference) < 10 && abs(heading-prevHeading) < 0.2){
-			stage = 8;
+			//stage = 8;
 			bot->DriveOff();
 			bot->AutonFreeEncoders();
 			bot->AutonInitEncoders();
