@@ -63,8 +63,8 @@ private:
 	VictorSPX * leftFollower;
 	VictorSPX * rightFollower;
 	TalonSRX * arm;
-	//VictorSPX * leftClaw;
-	TalonSRX * leftClaw;
+	VictorSPX * leftClaw;
+	//TalonSRX * leftClaw;
 	TalonSRX * rightClaw;
 
 	PigeonIMU * pigeon;
@@ -108,8 +108,8 @@ public:
 		leftMaster = new TalonSRX(LEFT_MASTER_ID);
 		rightMaster = new TalonSRX(RIGHT_MASTER_ID);
 		arm = new TalonSRX(ARM_ID);
-		//leftClaw = new VictorSPX(LEFT_CLAW_ID);
-		leftClaw = new TalonSRX(LEFT_CLAW_ID);
+		leftClaw = new VictorSPX(LEFT_CLAW_ID);
+		//leftClaw = new TalonSRX(LEFT_CLAW_ID);
 		rightClaw = new TalonSRX(RIGHT_CLAW_ID);
 
 		pigeon = new PigeonIMU(0);

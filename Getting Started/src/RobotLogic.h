@@ -20,7 +20,7 @@
 #define PID 3
 
 //SET THIS DEFINE TO EITHER PRACTICE_BOT OR COMPETITION_BOT
-#define PRACTICE_BOT
+#define COMPETITION_BOT
 
 #ifdef PRACTICE_BOT
 #define PID_INITIAL 0
@@ -57,13 +57,23 @@
 #endif
 
 #ifdef COMPETITION_BOT
+//OLD FROM POMONA COMPETITION, THESE ARE FOR ARM SHAFT ENCODER
+/*
 #define PID_INITIAL -15
 #define PID_LOW_TARGET -5
 #define PID_AUTO_TARGET -115
 #define PID_MID_TARGET -330
 #define PID_HIGH_TARGET -420
 #define PID_MAX -450
-#define PID_ARM_MULTIPLIER 6.0
+#define PID_ARM_MULTIPLIER 6.0*/
+#define PID_INITIAL 0
+#define PID_LOW_TARGET -1000 * 10/3
+// PID AUTON SCORE TARGET -20000 or -35000?
+#define PID_AUTO_TARGET -30000 * 10/3
+#define PID_MID_TARGET -90000 * 10/3
+#define PID_HIGH_TARGET -125000 * 10/3
+#define PID_MAX -130000 * 10/3
+#define PID_ARM_MULTIPLIER 500.0 * 10/3
 #define LEFT_MASTER_ID 4
 #define LEFT_FOLLOW_ID 3
 #define RIGHT_MASTER_ID 8
@@ -75,15 +85,21 @@
 #define CLAW_PCM_ID_2 1
 #define CLAW_WRIST_PCM_ID_1 2
 #define CLAW_WRIST_PCM_ID_2 3
-#define ARM_P 8.0
+#define ARM_P 0.3
+#define ARM_I 0.00001
+#define ARM_D 15.0
+//OLD FROM POMONA
+/*#define ARM_P 8.0
 #define ARM_I 0.001
-#define ARM_D 1200.0
+#define ARM_D 1200.0*/
 #define LEFT_INVERTED false
-#define LEFT_CLAW_INVERTED true
+#define LEFT_CLAW_INVERTED false
 #define RIGHT_INVERTED true
-#define RIGHT_CLAW_INVERTED false
+#define RIGHT_CLAW_INVERTED true
 #define ARM_INVERTED false
-#define ARM_ENCODER_PHASE false
+//OLD AT POMONA
+//#define ARM_ENCODER_PHASE false
+#define ARM_ENCODER_PHASE true
 #endif
 
 class RobotLogic {
@@ -100,8 +116,8 @@ private:
 	VictorSPX * leftFollower = NULL;
 	VictorSPX * rightFollower = NULL;
 	TalonSRX * arm = NULL;
-	//VictorSPX * leftClaw = NULL;
-	TalonSRX * leftClaw = NULL;
+	VictorSPX * leftClaw = NULL;
+	//TalonSRX * leftClaw = NULL;
 	TalonSRX * rightClaw = NULL;
 
 	frc::DoubleSolenoid * claw = NULL;
@@ -145,8 +161,8 @@ public:
 	void SetLeftFollowerMotor(VictorSPX *);
 	void SetRightFollowerMotor(VictorSPX *);
 	void SetArmMotor(TalonSRX *);
-	//void SetLeftClawMotor(VictorSPX *);
-	void SetLeftClawMotor(TalonSRX *);
+	void SetLeftClawMotor(VictorSPX *);
+	//void SetLeftClawMotor(TalonSRX *);
 	void SetRightClawMotor(TalonSRX *);
 	void SetClaw(frc::DoubleSolenoid *);
 	void SetClawWrist(frc::DoubleSolenoid *);

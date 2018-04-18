@@ -33,8 +33,8 @@ void RobotLogic::SetRightFollowerMotor(VictorSPX * rightFollower){
 void RobotLogic::SetArmMotor(TalonSRX * arm){
 	this->arm = arm;
 }
-//void RobotLogic::SetLeftClawMotor(VictorSPX * leftClaw){
-void RobotLogic::SetLeftClawMotor(TalonSRX * leftClaw){
+void RobotLogic::SetLeftClawMotor(VictorSPX * leftClaw){
+//void RobotLogic::SetLeftClawMotor(TalonSRX * leftClaw){
 	this->leftClaw = leftClaw;
 }
 void RobotLogic::SetRightClawMotor(TalonSRX * rightClaw){
