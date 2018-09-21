@@ -40,8 +40,6 @@
 #define RIGHT_CLAW_ID 10
 #define CLAW_PCM_ID_1 1
 #define CLAW_PCM_ID_2 0
-#define CLAW_WRIST_PCM_ID_1 5
-#define CLAW_WRIST_PCM_ID_2 4
 //#define ARM_P 0.1
 //#define ARM_I 0.00001
 //#define ARM_D 15.0
@@ -83,8 +81,6 @@
 #define RIGHT_CLAW_ID 2
 #define CLAW_PCM_ID_1 0
 #define CLAW_PCM_ID_2 1
-#define CLAW_WRIST_PCM_ID_1 2
-#define CLAW_WRIST_PCM_ID_2 3
 #define ARM_P 0.3
 #define ARM_I 0.00001
 #define ARM_D 15.0
@@ -106,7 +102,6 @@ class RobotLogic {
 private:
 	int mode = DIRECT;
 	bool clawEnabled = false;
-	bool clawWristEnabled = true;
 
 	int timeoutMS = 10;
 	int PIDLoopIDX = 0;
@@ -165,7 +160,6 @@ public:
 	//void SetLeftClawMotor(TalonSRX *);
 	void SetRightClawMotor(TalonSRX *);
 	void SetClaw(frc::DoubleSolenoid *);
-	void SetClawWrist(frc::DoubleSolenoid *);
 	void SetPigeon(PigeonIMU *);
 
 	int GetArmTarget();
@@ -194,8 +188,6 @@ public:
 
 	void ClawClose();
 	void ClawOpen();
-	void ClawWristRetract();
-	void ClawWristExtend();
 	void ClawNeutralSuck();
 	void ClawSuck();
 	void ClawSpitSlow();

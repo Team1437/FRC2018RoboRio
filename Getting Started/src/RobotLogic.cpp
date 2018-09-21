@@ -43,9 +43,6 @@ void RobotLogic::SetRightClawMotor(TalonSRX * rightClaw){
 void RobotLogic::SetClaw(frc::DoubleSolenoid * claw){
 	this->claw = claw;
 }
-void RobotLogic::SetClawWrist(frc::DoubleSolenoid * clawWrist){
-	this->clawWrist = clawWrist;
-}
 void RobotLogic::SetPigeon(PigeonIMU * pigeon){
 	this->pigeon = pigeon;
 }
@@ -183,9 +180,7 @@ void RobotLogic::SetMode(){
 
 void RobotLogic::ResetClaw(){
 	this->claw->Set(frc::DoubleSolenoid::Value::kOff);
-	this->clawWrist->Set(frc::DoubleSolenoid::Value::kOff);
 	this->clawEnabled = false;
-	this->clawWristEnabled = false;
 }
 
 void RobotLogic::ResetAuton(){
@@ -208,7 +203,6 @@ void RobotLogic::Kill(){
 	this->leftClaw->Set(ControlMode::PercentOutput, 0.0);
 	this->rightClaw->Set(ControlMode::PercentOutput, 0.0);
 	claw->Set(frc::DoubleSolenoid::Value::kOff);
-	clawWrist->Set(frc::DoubleSolenoid::Value::kOff);
 }
 
 
@@ -220,14 +214,6 @@ void RobotLogic::ClawOpen(){
 void RobotLogic::ClawClose(){
 	this->claw->Set(frc::DoubleSolenoid::Value::kForward);
 	this->clawEnabled = false;
-}
-void RobotLogic::ClawWristExtend(){
-	this->clawWrist->Set(frc::DoubleSolenoid::Value::kReverse);
-	this->clawWristEnabled = false;
-}
-void RobotLogic::ClawWristRetract(){
-	this->clawWrist->Set(frc::DoubleSolenoid::Value::kForward);
-	this->clawWristEnabled = true;
 }
 
 void RobotLogic::ClawNeutralSuck(){
@@ -321,9 +307,6 @@ void RobotLogic::DirectControlClaw(){
 	if(control->GetButtonClawTogglePressed()){
 		this->clawEnabled = !this->clawEnabled;
 	}
-	if(control->GetButtonClawWristToggle()){
-		this->clawWristEnabled = !this->clawWristEnabled;
-	}
 
 	if(control->GetButtonClawClose()){
 		clawEnabled = false;
@@ -336,11 +319,6 @@ void RobotLogic::DirectControlClaw(){
 		this->ClawOpen();
 	} else {
 		this->ClawClose();
-	}
-	if(clawWristEnabled){
-		this->ClawWristRetract();
-	} else {
-		this->ClawWristExtend();
 	}
 
 	//Claw Motors
